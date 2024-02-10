@@ -1,0 +1,94 @@
+---
+name: ollama-webui
+base: core22
+version: '0.1'  # rewritten by adopt-info & `snapcraftctl set-version` below
+summary: ChatGPT-Style Web UI Client for Ollama 🦙
+description: |
+  The Ollama Web UI consists of two primary components:
+  the frontend and the backend (which serves as a reverse proxy,
+  handling static frontend files, and additional features).
+  Both are set up.
+# adopt-info: backend
+grade: stable
+confinement: devmode
+license: MIT
+architectures:
+  - build-on: [amd64]
+    build-for: [amd64]
+  - build-on: [arm64]
+    build-for: [arm64]
+
+apps:
+  webui:
+    command: bin/start.sh
+    plugs:
+      - home
+      - removable-media
+      - network
+      - network-bind
+    environment:
+      ENV: prod
+      SCARF_NO_ANALYTICS: 'true'
+      DO_NOT_TRACK: 'true'
+  listener:
+    command: bin/start.sh
+    daemon: simple
+    install-mode: enable
+    restart-condition: on-failure
+    plugs:
+      - home
+      - removable-media
+      - network
+      - network-bind
+    environment:
+      ENV: prod
+      SCARF_NO_ANALYTICS: 'true'
+      DO_NOT_TRACK: 'true'
+
+parts:
+  launcher:
+    plugin: dump
+    source: ./backend
+    organize:
+      start.sh: bin/start.sh
+  minilm:
+    plugin: dump
+    source: https://chroma-onnx-models.s3.amazonaws.com/all-MiniLM-L6-v2/onnx.tar.gz
+    organize:
+      onnx: $SNAP/.cache/chroma/onnx_models/all-MiniLM-L6-v2/onnx
+  webui:
+    after: [minilm]
+    plugin: nil
+    source: .
+    source-type: git
+    override-build: |
+      craftctl default
+      npm ci
+      npm run build
+    stage-snaps:
+      - node/20/stable
+    organize:
+      build: $SNAP/build
+  
+  backend:
+    plugin: python
+    python-requirements:
+      - backend/requirements.txt
+    source: .
+    source-type: git
+    stage-packages:
+      - python3.11
+      - python3-pip
+      - pandoc
+      - netcat-openbsd
+      - git
+    organize: 
+      backend: $SNAP/backend
+  #  override-pull: |
+  #    craftctl default
+  #    last_committed_tag="$(git describe --tags --abbrev=0)"
+  #    last_committed_tag_ver="$(echo ${last_committed_tag} | sed 's/v//')"
+  #    snapcraftctl set-version "$(git describe --tags | sed 's/v//')"
+  #   override-build: |
+  #     go generate ./...
+  #     craftctl default

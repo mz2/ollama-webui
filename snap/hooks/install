@@ -1,0 +1,8 @@
+#!/bin/bash
+set -e
+
+snapctl set port=""
+snapctl set ollama_api_base_url="/ollama/api"
+snapctl set openai_api_base_url=""
+snapctl set openai_api_key=""
+snapctl set webui_secret_key=""
