@@ -10,7 +10,7 @@ description: |
   Both are set up.
 # adopt-info: backend
 grade: stable
-confinement: devmode
+confinement: strict
 license: MIT
 architectures:
   - build-on: [amd64]
