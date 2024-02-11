@@ -33,7 +33,7 @@ apps:
       WEBUI_SECRET_KEY: "foobar"
       PORT: 8087
   listener:
-    command: $SNAP/backend/start.sh
+    command: backend/start.sh
     daemon: simple
     install-mode: enable
     restart-condition: on-failure
@@ -51,17 +51,17 @@ apps:
 
 parts:
   launcher:
-    plugin: nil
+    plugin: dump
     source: ./bin
     organize:
-      snap_launcher.sh: bin/
+      snap_launcher.sh: bin/snap_launcher.sh
   minilm:
     plugin: dump
     source: https://chroma-onnx-models.s3.amazonaws.com/all-MiniLM-L6-v2/onnx.tar.gz
     organize:
-      onnx: $SNAP/root/.cache/chroma/onnx_models/all-MiniLM-L6-v2/onnx
+      onnx: root/.cache/chroma/onnx_models/all-MiniLM-L6-v2/onnx
   frontend:
-    after: [minilm]
+    after: [launcher, minilm]
     plugin: nil
     source: .
     source-type: git
@@ -69,13 +69,14 @@ parts:
       craftctl default
       npm ci
       npm run build
+      cp -r build CRAFT_PART_INSTALL
     stage-snaps:
       - node/20/stable
-    organize:
-      build: $SNAP/build
+        #organize:
+        # build: $SNAP/build
   backend:
     after: [frontend]
-    plugin: nil
+    plugin: python
     source: .
     source-type: git
     build-packages:
@@ -89,15 +90,19 @@ parts:
       - python3.10-venv
       - python3-pip
       - pandoc
+    python-requirements:
+      - backend/requirements.txt
+    #stage:
+    #- backend/**
     override-build: |
       craftctl default
-      python3 -m venv ./backend/venv
-      . ./backend/venv/bin/activate
+      #python3 -m venv ./backend/venv
+      # . ./backend/venv/bin/activate
       pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu --no-cache-dir
-      pip3 install -r backend/requirements.txt --no-cache-dir
+      # pip3 install -r backend/requirements.txt --no-cache-dir
       cp -r backend $CRAFT_PART_INSTALL
-    organize:
-      backend: $SNAP/backend
+      # organize:
+      # backend: $SNAP/backend
   #  override-pull: |
   #    craftctl default
   #    last_committed_tag="$(git describe --tags --abbrev=0)"
