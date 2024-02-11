@@ -1,7 +1,7 @@
 ---
 name: ollama-webui
 base: core22
-version: '0.1'  # rewritten by adopt-info & `snapcraftctl set-version` below
+version: '0'  # no released version yet
 summary: ChatGPT-Style Web UI Client for Ollama 🦙
 description: |
   The Ollama Web UI consists of two primary components:
