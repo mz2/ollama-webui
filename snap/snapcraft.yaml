@@ -20,7 +20,7 @@ architectures:
 
 apps:
   webui:
-    command: bin/start.sh
+    command: bin/snap_launcher.sh
     plugs:
       - home
       - removable-media
@@ -30,8 +30,10 @@ apps:
       ENV: prod
       SCARF_NO_ANALYTICS: 'true'
       DO_NOT_TRACK: 'true'
+      WEBUI_SECRET_KEY: "foobar"
+      PORT: 8087
   listener:
-    command: bin/start.sh
+    command: $SNAP/backend/start.sh
     daemon: simple
     install-mode: enable
     restart-condition: on-failure
@@ -44,19 +46,23 @@ apps:
       ENV: prod
       SCARF_NO_ANALYTICS: 'true'
       DO_NOT_TRACK: 'true'
+      WEBUI_SECRET_KEY: "foobar"
+      PORT: 8087
 
 parts:
   launcher:
     plugin: dump
-    source: ./backend
+    source: ./
+    stage:
+      - snap_launcher.sh
     organize:
-      start.sh: bin/start.sh
+      snap_launcher.sh: bin/
   minilm:
     plugin: dump
     source: https://chroma-onnx-models.s3.amazonaws.com/all-MiniLM-L6-v2/onnx.tar.gz
     organize:
-      onnx: $SNAP/.cache/chroma/onnx_models/all-MiniLM-L6-v2/onnx
-  webui:
+      onnx: $SNAP/root/.cache/chroma/onnx_models/all-MiniLM-L6-v2/onnx
+  frontend:
     after: [minilm]
     plugin: nil
     source: .
@@ -69,20 +75,30 @@ parts:
       - node/20/stable
     organize:
       build: $SNAP/build
-  
   backend:
-    plugin: python
-    python-requirements:
-      - backend/requirements.txt
+    after: [frontend]
+    plugin: nil
     source: .
     source-type: git
+    build-packages:
+      - netcat-openbsd
+      - python3.10
+      - python3.10-venv
+      - python3.10-dev
+      - git
     stage-packages:
-      - python3.11
+      - python3.10
+      - python3.10-venv
       - python3-pip
       - pandoc
-      - netcat-openbsd
-      - git
-    organize: 
+    override-build: |
+      craftctl default
+      python3 -m venv ./backend/venv
+      . ./backend/venv/bin/activate
+      pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu --no-cache-dir
+      pip3 install -r backend/requirements.txt --no-cache-dir
+      cp -r backend $CRAFT_PART_INSTALL
+    organize:
       backend: $SNAP/backend
   #  override-pull: |
   #    craftctl default
