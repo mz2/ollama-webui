@@ -79,11 +79,11 @@ parts:
       - python3.10
       - python3.10-venv
       - python3.10-dev
+      - python3-pip
       - git
     stage-packages:
       - python3.10
       - python3.10-venv
-      - python3-pip
       - pandoc
       - libavcodec58
       - libavformat58
