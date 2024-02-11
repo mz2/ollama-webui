@@ -33,7 +33,7 @@ apps:
       WEBUI_SECRET_KEY: "foobar"
       PORT: 8087
   listener:
-    command: backend/start.sh
+    command: bin/snap_launcher.sh
     daemon: simple
     install-mode: enable
     restart-condition: on-failure
@@ -72,8 +72,6 @@ parts:
       cp -r build CRAFT_PART_INSTALL
     stage-snaps:
       - node/20/stable
-        #organize:
-        # build: $SNAP/build
   backend:
     after: [frontend]
     plugin: python
@@ -92,17 +90,10 @@ parts:
       - pandoc
     python-requirements:
       - backend/requirements.txt
-    #stage:
-    #- backend/**
     override-build: |
       craftctl default
-      #python3 -m venv ./backend/venv
-      # . ./backend/venv/bin/activate
       pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu --no-cache-dir
-      # pip3 install -r backend/requirements.txt --no-cache-dir
       cp -r backend $CRAFT_PART_INSTALL
-      # organize:
-      # backend: $SNAP/backend
   #  override-pull: |
   #    craftctl default
   #    last_committed_tag="$(git describe --tags --abbrev=0)"
