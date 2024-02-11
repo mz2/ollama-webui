@@ -19,13 +19,14 @@ architectures:
     build-for: [arm64]
 
 apps:
-  webui:
+  ollama-webui:
     command: bin/run-snap.sh
     plugs:
       - home
       - removable-media
       - network
       - network-bind
+      - opengl
     environment:
       ENV: prod
       SCARF_NO_ANALYTICS: 'true'
