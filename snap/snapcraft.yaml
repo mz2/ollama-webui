@@ -30,8 +30,6 @@ apps:
       ENV: prod
       SCARF_NO_ANALYTICS: 'true'
       DO_NOT_TRACK: 'true'
-      WEBUI_SECRET_KEY: "foobar"
-      PORT: 8087
   listener:
     command: bin/snap_launcher.sh
     daemon: simple
@@ -46,9 +44,6 @@ apps:
       ENV: prod
       SCARF_NO_ANALYTICS: 'true'
       DO_NOT_TRACK: 'true'
-      WEBUI_SECRET_KEY: "foobar"
-      PORT: 8087
-
 parts:
   launcher:
     plugin: dump
@@ -69,7 +64,7 @@ parts:
       craftctl default
       npm ci
       npm run build
-      cp -r build CRAFT_PART_INSTALL
+      cp -r build $CRAFT_PART_INSTALL/frontend
     stage-snaps:
       - node/20/stable
   backend:
@@ -88,6 +83,8 @@ parts:
       - python3.10-venv
       - python3-pip
       - pandoc
+      - libavcodec58
+      - libavformat58
     python-requirements:
       - backend/requirements.txt
     override-build: |
