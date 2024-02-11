@@ -85,6 +85,8 @@ parts:
       - pandoc
       - libavcodec58
       - libavformat58
+      - libavdevice58
+      - libavfilter7
     python-requirements:
       - backend/requirements.txt
     override-build: |
