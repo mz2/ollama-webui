@@ -15,12 +15,12 @@ license: MIT
 architectures:
   - build-on: [amd64]
     build-for: [amd64]
-  - build-on: [arm64]
+  - build-on: [amd64, arm64]
     build-for: [arm64]
 
 apps:
   webui:
-    command: bin/snap_launcher.sh
+    command: bin/run-snap.sh
     plugs:
       - home
       - removable-media
@@ -31,7 +31,7 @@ apps:
       SCARF_NO_ANALYTICS: 'true'
       DO_NOT_TRACK: 'true'
   listener:
-    command: bin/snap_launcher.sh
+    command: bin/run-snap.sh
     daemon: simple
     install-mode: enable
     restart-condition: on-failure
@@ -47,9 +47,9 @@ apps:
 parts:
   launcher:
     plugin: dump
-    source: ./bin
+    source: ./snap/local
     organize:
-      snap_launcher.sh: bin/snap_launcher.sh
+      run-snap.sh: bin/run-snap.sh
   minilm:
     plugin: dump
     source: https://chroma-onnx-models.s3.amazonaws.com/all-MiniLM-L6-v2/onnx.tar.gz
@@ -93,11 +93,3 @@ parts:
       craftctl default
       pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu --no-cache-dir
       cp -r backend $CRAFT_PART_INSTALL
-  #  override-pull: |
-  #    craftctl default
-  #    last_committed_tag="$(git describe --tags --abbrev=0)"
-  #    last_committed_tag_ver="$(echo ${last_committed_tag} | sed 's/v//')"
-  #    snapcraftctl set-version "$(git describe --tags | sed 's/v//')"
-  #   override-build: |
-  #     go generate ./...
-  #     craftctl default
