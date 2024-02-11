@@ -51,10 +51,8 @@ apps:
 
 parts:
   launcher:
-    plugin: dump
-    source: ./
-    stage:
-      - snap_launcher.sh
+    plugin: nil
+    source: ./bin
     organize:
       snap_launcher.sh: bin/
   minilm:
