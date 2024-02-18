@@ -3,7 +3,7 @@
 	import toast from 'svelte-french-toast';
 
 	import { createModel, deleteModel, pullModel } from '$lib/apis/ollama';
-	import { WEBUI_API_BASE_URL } from '$lib/constants';
+	import { WEBUI_API_BASE_URL, WEBUI_NAME } from '$lib/constants';
 	import { models, user } from '$lib/stores';
 	import { splitStream } from '$lib/utils';
 
@@ -59,7 +59,7 @@
 				} else {
 					toast.success(`Model '${modelName}' has been successfully downloaded.`);
 
-					const notification = new Notification(`Ollama`, {
+					const notification = new Notification(WEBUI_NAME, {
 						body: `Model '${modelName}' has been successfully downloaded.`,
 						icon: '/favicon.png'
 					});
@@ -291,7 +291,7 @@
 <div class="flex flex-col h-full justify-between text-sm">
 	<div class=" space-y-3 pr-1.5 overflow-y-scroll h-80">
 		<div>
-			<div class=" mb-2.5 text-sm font-medium">Pull a model from Ollama.ai</div>
+			<div class=" mb-2.5 text-sm font-medium">Pull a model from Ollama.com</div>
 			<div class="flex w-full">
 				<div class="flex-1 mr-2">
 					<input
@@ -354,7 +354,7 @@
 			<div class="mt-2 mb-1 text-xs text-gray-400 dark:text-gray-500">
 				To access the available model names for downloading, <a
 					class=" text-gray-500 dark:text-gray-300 font-medium"
-					href="https://ollama.ai/library"
+					href="https://ollama.com/library"
 					target="_blank">click here.</a
 				>
 			</div>

@@ -1,4 +1,4 @@
-from fastapi import Response
+from fastapi import Response, Request
 from fastapi import Depends, FastAPI, HTTPException, status
 from datetime import datetime, timedelta
 from typing import List, Union, Optional
@@ -27,14 +27,31 @@ async def get_users(skip: int = 0, limit: int = 50, user=Depends(get_admin_user)
 
 
 ############################
+# User Permissions
+############################
+
+
+@router.get("/permissions/user")
+async def get_user_permissions(request: Request, user=Depends(get_admin_user)):
+    return request.app.state.USER_PERMISSIONS
+
+
+@router.post("/permissions/user")
+async def update_user_permissions(
+    request: Request, form_data: dict, user=Depends(get_admin_user)
+):
+    request.app.state.USER_PERMISSIONS = form_data
+    return request.app.state.USER_PERMISSIONS
+
+
+############################
 # UpdateUserRole
 ############################
 
 
 @router.post("/update/role", response_model=Optional[UserModel])
-async def update_user_role(
-    form_data: UserRoleUpdateForm, user=Depends(get_admin_user)
-):
+async def update_user_role(form_data: UserRoleUpdateForm, user=Depends(get_admin_user)):
+
     if user.id != form_data.id:
         return Users.update_user_role_by_id(form_data.id, form_data.role)
 
@@ -115,4 +132,3 @@ async def delete_user_by_id(user_id: str, user=Depends(get_admin_user)):
         status_code=status.HTTP_403_FORBIDDEN,
         detail=ERROR_MESSAGES.ACTION_PROHIBITED,
     )
-

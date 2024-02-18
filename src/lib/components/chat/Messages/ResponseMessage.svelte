@@ -15,6 +15,7 @@
 	import CodeBlock from './CodeBlock.svelte';
 
 	import { synthesizeOpenAISpeech } from '$lib/apis/openai';
+	import { extractSentences } from '$lib/utils';
 
 	export let modelfiles = [];
 	export let message;
@@ -28,6 +29,7 @@
 	export let rateMessage: Function;
 
 	export let copyToClipboard: Function;
+	export let continueGeneration: Function;
 	export let regenerateResponse: Function;
 
 	let edit = false;
@@ -35,8 +37,10 @@
 
 	let tooltipInstance = null;
 
-	let audioMap = {};
+	let sentencesAudio = {};
 	let speaking = null;
+	let speakingIdx = null;
+
 	let loadingSpeech = false;
 
 	$: tokens = marked.lexer(message.content);
@@ -61,20 +65,25 @@
 		await tick();
 
 		if (tooltipInstance) {
-			tooltipInstance[0].destroy();
+			tooltipInstance[0]?.destroy();
 		}
 
 		renderLatex();
 
 		if (message.info) {
 			tooltipInstance = tippy(`#info-${message.id}`, {
-				content: `<span class="text-xs" id="tooltip-${message.id}">token/s: ${
+				content: `<span class="text-xs" id="tooltip-${message.id}">response_token/s: ${
 					`${
 						Math.round(
 							((message.info.eval_count ?? 0) / (message.info.eval_duration / 1000000000)) * 100
 						) / 100
 					} tokens` ?? 'N/A'
 				}<br/>
+					prompt_token/s: ${
+						Math.round(
+							((message.info.prompt_eval_count ?? 0) / (message.info.prompt_eval_duration / 1000000000)) * 100
+						) / 100 ?? 'N/A'
+					} tokens<br/>
                     total_duration: ${
 											Math.round(((message.info.total_duration ?? 0) / 1000000) * 100) / 100 ??
 											'N/A'
@@ -116,44 +125,86 @@
 		}
 	};
 
+	const playAudio = (idx) => {
+		return new Promise((res) => {
+			speakingIdx = idx;
+			const audio = sentencesAudio[idx];
+			audio.play();
+			audio.onended = async (e) => {
+				await new Promise((r) => setTimeout(r, 300));
+
+				if (Object.keys(sentencesAudio).length - 1 === idx) {
+					speaking = null;
+
+					if ($settings.conversationMode) {
+						document.getElementById('voice-input-button')?.click();
+					}
+				}
+
+				res(e);
+			};
+		});
+	};
+
 	const toggleSpeakMessage = async () => {
 		if (speaking) {
 			speechSynthesis.cancel();
-			speaking = null;
 
-			audioMap[message.id].pause();
-			audioMap[message.id].currentTime = 0;
+			sentencesAudio[speakingIdx].pause();
+			sentencesAudio[speakingIdx].currentTime = 0;
+
+			speaking = null;
+			speakingIdx = null;
 		} else {
 			speaking = true;
 
-			if ($settings?.speech?.engine === 'openai') {
+			if ($settings?.audio?.TTSEngine === 'openai') {
 				loadingSpeech = true;
-				const res = await synthesizeOpenAISpeech(
-					localStorage.token,
-					$settings?.speech?.speaker,
-					message.content
-				).catch((error) => {
-					toast.error(error);
-					return null;
-				});
 
-				if (res) {
-					const blob = await res.blob();
-					const blobUrl = URL.createObjectURL(blob);
-					console.log(blobUrl);
-
-					loadingSpeech = false;
-
-					const audio = new Audio(blobUrl);
-					audioMap[message.id] = audio;
-
-					audio.onended = () => {
-						speaking = null;
-						if ($settings.conversationMode) {
-							document.getElementById('voice-input-button')?.click();
+				const sentences = extractSentences(message.content).reduce((mergedTexts, currentText) => {
+					const lastIndex = mergedTexts.length - 1;
+					if (lastIndex >= 0) {
+						const previousText = mergedTexts[lastIndex];
+						const wordCount = previousText.split(/\s+/).length;
+						if (wordCount < 2) {
+							mergedTexts[lastIndex] = previousText + ' ' + currentText;
+						} else {
+							mergedTexts.push(currentText);
 						}
-					};
-					audio.play().catch((e) => console.error('Error playing audio:', e));
+					} else {
+						mergedTexts.push(currentText);
+					}
+					return mergedTexts;
+				}, []);
+
+				console.log(sentences);
+
+				sentencesAudio = sentences.reduce((a, e, i, arr) => {
+					a[i] = null;
+					return a;
+				}, {});
+
+				let lastPlayedAudioPromise = Promise.resolve(); // Initialize a promise that resolves immediately
+
+				for (const [idx, sentence] of sentences.entries()) {
+					const res = await synthesizeOpenAISpeech(
+						localStorage.token,
+						$settings?.audio?.speaker,
+						sentence
+					).catch((error) => {
+						toast.error(error);
+						return null;
+					});
+
+					if (res) {
+						const blob = await res.blob();
+						const blobUrl = URL.createObjectURL(blob);
+						const audio = new Audio(blobUrl);
+						sentencesAudio[idx] = audio;
+						loadingSpeech = false;
+
+						lastPlayedAudioPromise = lastPlayedAudioPromise.then(() => playAudio(idx));
+					}
 				}
 			} else {
 				let voices = [];
@@ -163,7 +214,7 @@
 						clearInterval(getVoicesLoop);
 
 						const voice =
-							voices?.filter((v) => v.name === $settings?.speech?.speaker)?.at(0) ?? undefined;
+							voices?.filter((v) => v.name === $settings?.audio?.speaker)?.at(0) ?? undefined;
 
 						const speak = new SpeechSynthesisUtterance(message.content);
 
@@ -193,6 +244,10 @@
 	};
 
 	const editMessageConfirmHandler = async () => {
+		if (editedContent === '') {
+			editedContent = ' ';
+		}
+
 		confirmEditResponseMessage(message.id, editedContent);
 
 		edit = false;
@@ -224,9 +279,7 @@
 				{#if message.model in modelfiles}
 					{modelfiles[message.model]?.title}
 				{:else}
-					Ollama <span class=" text-gray-500 text-sm font-medium"
-						>{message.model ? ` ${message.model}` : ''}</span
-					>
+					{message.model ? ` ${message.model}` : ''}
 				{/if}
 
 				{#if message.timestamp}
@@ -240,7 +293,7 @@
 				<Skeleton />
 			{:else}
 				<div
-					class="prose chat-{message.role} w-full max-w-full dark:prose-invert prose-headings:my-0 prose-p:my-0 prose-p:-mb-4 prose-pre:my-0 prose-table:my-0 prose-blockquote:my-0 prose-img:my-0 prose-ul:-my-4 prose-ol:-my-4 prose-li:-my-3 prose-ul:-mb-6 prose-ol:-mb-6 prose-li:-mb-4 whitespace-pre-line"
+					class="prose chat-{message.role} w-full max-w-full dark:prose-invert prose-headings:my-0 prose-p:m-0 prose-p:-mb-6 prose-pre:my-0 prose-table:my-0 prose-blockquote:my-0 prose-img:my-0 prose-ul:-my-4 prose-ol:-my-4 prose-li:-my-3 prose-ul:-mb-6 prose-ol:-mb-8 prose-li:-mb-4 whitespace-pre-line"
 				>
 					<div>
 						{#if edit === true}
@@ -317,11 +370,13 @@
 								{/if}
 
 								{#if message.done}
-									<div class=" flex justify-start space-x-1 -mt-2">
+									<div
+										class=" flex justify-start space-x-1 overflow-x-auto buttons text-gray-700 dark:text-gray-500"
+									>
 										{#if siblings.length > 1}
-											<div class="flex self-center">
+											<div class="flex self-center min-w-fit">
 												<button
-													class="self-center"
+													class="self-center dark:hover:text-white hover:text-black transition"
 													on:click={() => {
 														showPreviousMessage(message);
 													}}
@@ -340,12 +395,12 @@
 													</svg>
 												</button>
 
-												<div class="text-xs font-bold self-center">
+												<div class="text-xs font-bold self-center min-w-fit dark:text-gray-100">
 													{siblings.indexOf(message.id) + 1} / {siblings.length}
 												</div>
 
 												<button
-													class="self-center"
+													class="self-center dark:hover:text-white hover:text-black transition"
 													on:click={() => {
 														showNextMessage(message);
 													}}
@@ -369,7 +424,7 @@
 										<button
 											class="{isLastMessage
 												? 'visible'
-												: 'invisible group-hover:visible'} p-1 rounded dark:hover:text-white transition"
+												: 'invisible group-hover:visible'} p-1 rounded dark:hover:text-white hover:text-black transition"
 											on:click={() => {
 												editMessageHandler();
 											}}
@@ -393,7 +448,7 @@
 										<button
 											class="{isLastMessage
 												? 'visible'
-												: 'invisible group-hover:visible'} p-1 rounded dark:hover:text-white transition copy-response-button"
+												: 'invisible group-hover:visible'} p-1 rounded dark:hover:text-white hover:text-black transition copy-response-button"
 											on:click={() => {
 												copyToClipboard(message.content);
 											}}
@@ -419,7 +474,7 @@
 												? 'visible'
 												: 'invisible group-hover:visible'} p-1 rounded {message.rating === 1
 												? 'bg-gray-100 dark:bg-gray-800'
-												: ''} transition"
+												: ''} dark:hover:text-white hover:text-black transition"
 											on:click={() => {
 												rateMessage(message.id, 1);
 											}}
@@ -443,7 +498,7 @@
 												? 'visible'
 												: 'invisible group-hover:visible'} p-1 rounded {message.rating === -1
 												? 'bg-gray-100 dark:bg-gray-800'
-												: ''} transition"
+												: ''} dark:hover:text-white hover:text-black transition"
 											on:click={() => {
 												rateMessage(message.id, -1);
 											}}
@@ -467,7 +522,7 @@
 											id="speak-button-{message.id}"
 											class="{isLastMessage
 												? 'visible'
-												: 'invisible group-hover:visible'} p-1 rounded dark:hover:text-white transition"
+												: 'invisible group-hover:visible'} p-1 rounded dark:hover:text-white hover:text-black transition"
 											on:click={() => {
 												if (!loadingSpeech) {
 													toggleSpeakMessage(message);
@@ -541,7 +596,7 @@
 											<button
 												class=" {isLastMessage
 													? 'visible'
-													: 'invisible group-hover:visible'} p-1 rounded dark:hover:text-white transition whitespace-pre-wrap"
+													: 'invisible group-hover:visible'} p-1 rounded dark:hover:text-white hover:text-black transition whitespace-pre-wrap"
 												on:click={() => {
 													console.log(message);
 												}}
@@ -569,7 +624,37 @@
 												type="button"
 												class="{isLastMessage
 													? 'visible'
-													: 'invisible group-hover:visible'} p-1 rounded dark:hover:text-white transition regenerate-response-button"
+													: 'invisible group-hover:visible'} p-1 rounded dark:hover:text-white hover:text-black transition regenerate-response-button"
+												on:click={() => {
+													continueGeneration();
+												}}
+											>
+												<svg
+													xmlns="http://www.w3.org/2000/svg"
+													fill="none"
+													viewBox="0 0 24 24"
+													stroke-width="1.5"
+													stroke="currentColor"
+													class="w-4 h-4"
+												>
+													<path
+														stroke-linecap="round"
+														stroke-linejoin="round"
+														d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+													/>
+													<path
+														stroke-linecap="round"
+														stroke-linejoin="round"
+														d="M15.91 11.672a.375.375 0 0 1 0 .656l-5.603 3.113a.375.375 0 0 1-.557-.328V8.887c0-.286.307-.466.557-.327l5.603 3.112Z"
+													/>
+												</svg>
+											</button>
+
+											<button
+												type="button"
+												class="{isLastMessage
+													? 'visible'
+													: 'invisible group-hover:visible'} p-1 rounded dark:hover:text-white hover:text-black transition regenerate-response-button"
 												on:click={regenerateResponse}
 											>
 												<svg
@@ -598,3 +683,14 @@
 		</div>
 	</div>
 {/key}
+
+<style>
+	.buttons::-webkit-scrollbar {
+		display: none; /* for Chrome, Safari and Opera */
+	}
+
+	.buttons {
+		-ms-overflow-style: none; /* IE and Edge */
+		scrollbar-width: none; /* Firefox */
+	}
+</style>

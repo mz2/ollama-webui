@@ -53,9 +53,13 @@
 	onMount(() => {
 		window.addEventListener('message', async (event) => {
 			if (
-				!['https://ollamahub.com', 'https://www.ollamahub.com', 'http://localhost:5173'].includes(
-					event.origin
-				)
+				![
+					'https://ollamahub.com',
+					'https://www.ollamahub.com',
+					'https://openwebui.com',
+					'https://www.openwebui.com',
+					'http://localhost:5173'
+				].includes(event.origin)
 			)
 				return;
 			const prompt = JSON.parse(event.data);
@@ -73,8 +77,8 @@
 	});
 </script>
 
-<div class="min-h-screen w-full flex justify-center dark:text-white">
-	<div class=" py-2.5 flex flex-col justify-between w-full">
+<div class="min-h-screen max-h-[100dvh] w-full flex justify-center dark:text-white">
+	<div class=" py-2.5 flex flex-col justify-between w-full overflow-y-auto">
 		<div class="max-w-2xl mx-auto w-full px-3 md:px-0 my-10">
 			<div class=" text-2xl font-semibold mb-6">My Prompts</div>
 
@@ -167,12 +171,18 @@
 						</div>
 
 						<div class="text-xs text-gray-400 dark:text-gray-500">
-							Format your variables using square brackets like this: <span
+							ⓘ Format your variables using square brackets like this: <span
 								class=" text-gray-600 dark:text-gray-300 font-medium">[variable]</span
 							>
 							. Make sure to enclose them with
 							<span class=" text-gray-600 dark:text-gray-300 font-medium">'['</span>
-							and <span class=" text-gray-600 dark:text-gray-300 font-medium">']'</span> .
+							and <span class=" text-gray-600 dark:text-gray-300 font-medium">']'</span>.
+						</div>
+
+						<div class="text-xs text-gray-400 dark:text-gray-500">
+							Utilize <span class=" text-gray-600 dark:text-gray-300 font-medium"
+								>{`{{CLIPBOARD}}`}</span
+							> variable to have them replaced with clipboard content.
 						</div>
 					</div>
 				</div>

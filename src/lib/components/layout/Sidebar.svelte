@@ -15,6 +15,7 @@
 		getChatListByTagName,
 		updateChatById
 	} from '$lib/apis/chats';
+	import toast from 'svelte-french-toast';
 
 	let show = false;
 	let navElement;
@@ -64,10 +65,17 @@
 	};
 
 	const deleteChat = async (id) => {
-		goto('/');
+		const res = await deleteChatById(localStorage.token, id).catch((error) => {
+			toast.error(error);
+			chatDeleteId = null;
 
-		await deleteChatById(localStorage.token, id);
-		await chats.set(await getChatList(localStorage.token));
+			return null;
+		});
+
+		if (res) {
+			goto('/');
+			await chats.set(await getChatList(localStorage.token));
+		}
 	};
 
 	const saveSettings = async (updated) => {
@@ -79,12 +87,16 @@
 
 <div
 	bind:this={navElement}
-	class="h-screen {show
-		? ''
-		: '-translate-x-[260px]'}  w-[260px] fixed top-0 left-0 z-40 transition bg-black text-gray-200 shadow-2xl text-sm
+	class="h-screen max-h-[100dvh] min-h-screen {show
+		? 'lg:relative w-[260px]'
+		: '-translate-x-[260px] w-[0px]'}  bg-black text-gray-200 shadow-2xl text-sm transition z-40 fixed top-0 left-0
         "
 >
-	<div class="py-2.5 my-auto flex flex-col justify-between h-screen">
+	<div
+		class="py-2.5 my-auto flex flex-col justify-between h-screen max-h-[100dvh] w-[260px] {show
+			? ''
+			: 'invisible'}"
+	>
 		<div class="px-2.5 flex justify-center space-x-2">
 			<button
 				id="sidebar-new-chat-button"

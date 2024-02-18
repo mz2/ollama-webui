@@ -212,9 +212,13 @@ SYSTEM """${system}"""`.replace(/^\s*\n/gm, '');
 	onMount(() => {
 		window.addEventListener('message', async (event) => {
 			if (
-				!['https://ollamahub.com', 'https://www.ollamahub.com', 'http://localhost:5173'].includes(
-					event.origin
-				)
+				![
+					'https://ollamahub.com',
+					'https://www.ollamahub.com',
+					'https://openwebui.com',
+					'https://www.openwebui.com',
+					'http://localhost:5173'
+				].includes(event.origin)
 			)
 				return;
 			const modelfile = JSON.parse(event.data);
@@ -252,8 +256,8 @@ SYSTEM """${system}"""`.replace(/^\s*\n/gm, '');
 	});
 </script>
 
-<div class="min-h-screen w-full flex justify-center dark:text-white">
-	<div class=" py-2.5 flex flex-col justify-between w-full">
+<div class="min-h-screen max-h-[100dvh] w-full flex justify-center dark:text-white">
+	<div class=" py-2.5 flex flex-col justify-between w-full overflow-y-auto">
 		<div class="max-w-2xl mx-auto w-full px-3 md:px-0 my-10">
 			<input
 				bind:this={filesInputElement}
@@ -474,7 +478,7 @@ SYSTEM """${system}"""`.replace(/^\s*\n/gm, '');
 								or
 								<a
 									class=" text-gray-500 dark:text-gray-300 font-medium"
-									href="https://ollamahub.com"
+									href="https://openwebui.com"
 									target="_blank"
 								>
 									Click here to check other modelfiles.
@@ -497,7 +501,7 @@ SYSTEM """${system}"""`.replace(/^\s*\n/gm, '');
 							<div class="mt-1 text-xs text-gray-400 dark:text-gray-500">
 								To access the available model names for downloading, <a
 									class=" text-gray-500 dark:text-gray-300 font-medium"
-									href="https://ollama.ai/library"
+									href="https://ollama.com/library"
 									target="_blank">click here.</a
 								>
 							</div>

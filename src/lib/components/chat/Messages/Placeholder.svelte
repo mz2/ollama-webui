@@ -16,9 +16,9 @@
 </script>
 
 {#if models.length > 0}
-	<div class="m-auto text-center max-w-md pb-56 px-2">
+	<div class="m-auto text-center max-w-md px-2">
 		<div class="flex justify-center mt-8">
-			<div class="flex -space-x-10">
+			<div class="flex -space-x-4 mb-1">
 				{#each models as model, modelIdx}
 					<button
 						on:click={() => {
@@ -29,18 +29,14 @@
 							<img
 								src={modelfiles[model]?.imageUrl ?? './favicon.png'}
 								alt="modelfile"
-								class=" w-20 mb-2 rounded-full {models.length > 1
-									? ' border-[5px] border-white dark:border-gray-900'
-									: ''}"
+								class=" w-14 rounded-full border-[1px] border-gray-200 dark:border-none"
 								draggable="false"
 							/>
 						{:else}
 							<img
 								src={models.length === 1 ? '/favicon.png' : '/favicon.png'}
-								class=" w-20 mb-2 {models.length === 1
-									? ''
-									: 'border-[5px] border-white dark:border-gray-900'}  rounded-full"
-								alt="ollama"
+								class=" w-14 rounded-full border-[1px] border-gray-200 dark:border-none"
+								alt="logo"
 								draggable="false"
 							/>
 						{/if}
@@ -58,7 +54,7 @@
 				</div>
 				{#if modelfile.user}
 					<div class="mt-0.5 text-sm font-normal text-gray-500 dark:text-gray-500">
-						By <a href="https://ollamahub.com/m/{modelfile.user.username}"
+						By <a href="https://openwebui.com/m/{modelfile.user.username}"
 							>{modelfile.user.name ? modelfile.user.name : `@${modelfile.user.username}`}</a
 						>
 					</div>

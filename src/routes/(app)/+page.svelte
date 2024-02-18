@@ -137,6 +137,11 @@
 		});
 	};
 
+	const scrollToBottom = () => {
+		const element = document.getElementById('messages-container');
+		element.scrollTop = element.scrollHeight;
+	};
+
 	//////////////////////////
 	// Ollama functions
 	//////////////////////////
@@ -261,7 +266,11 @@
 
 			console.log(contextString);
 
-			history.messages[parentId].raContent = RAGTemplate(contextString, query);
+			history.messages[parentId].raContent = await RAGTemplate(
+				localStorage.token,
+				contextString,
+				query
+			);
 			history.messages[parentId].contexts = relevantContexts;
 			await tick();
 			processing = '';
@@ -272,10 +281,34 @@
 				console.log(model);
 				const modelTag = $models.filter((m) => m.name === model).at(0);
 
+				// Create response message
+				let responseMessageId = uuidv4();
+				let responseMessage = {
+					parentId: parentId,
+					id: responseMessageId,
+					childrenIds: [],
+					role: 'assistant',
+					content: '',
+					model: model,
+					timestamp: Math.floor(Date.now() / 1000) // Unix epoch
+				};
+
+				// Add message to history and Set currentId to messageId
+				history.messages[responseMessageId] = responseMessage;
+				history.currentId = responseMessageId;
+
+				// Append messageId to childrenIds of parent message
+				if (parentId !== null) {
+					history.messages[parentId].childrenIds = [
+						...history.messages[parentId].childrenIds,
+						responseMessageId
+					];
+				}
+
 				if (modelTag?.external) {
-					await sendPromptOpenAI(model, prompt, parentId, _chatId);
+					await sendPromptOpenAI(model, prompt, responseMessageId, _chatId);
 				} else if (modelTag) {
-					await sendPromptOllama(model, prompt, parentId, _chatId);
+					await sendPromptOllama(model, prompt, responseMessageId, _chatId);
 				} else {
 					toast.error(`Model ${model} not found`);
 				}
@@ -285,36 +318,14 @@
 		await chats.set(await getChatList(localStorage.token));
 	};
 
-	const sendPromptOllama = async (model, userPrompt, parentId, _chatId) => {
-		// Create response message
-		let responseMessageId = uuidv4();
-		let responseMessage = {
-			parentId: parentId,
-			id: responseMessageId,
-			childrenIds: [],
-			role: 'assistant',
-			content: '',
-			model: model,
-			timestamp: Math.floor(Date.now() / 1000) // Unix epoch
-		};
-
-		// Add message to history and Set currentId to messageId
-		history.messages[responseMessageId] = responseMessage;
-		history.currentId = responseMessageId;
-
-		// Append messageId to childrenIds of parent message
-		if (parentId !== null) {
-			history.messages[parentId].childrenIds = [
-				...history.messages[parentId].childrenIds,
-				responseMessageId
-			];
-		}
+	const sendPromptOllama = async (model, userPrompt, responseMessageId, _chatId) => {
+		const responseMessage = history.messages[responseMessageId];
 
 		// Wait until history/message have been updated
 		await tick();
 
 		// Scroll down
-		window.scrollTo({ top: document.body.scrollHeight });
+		scrollToBottom();
 
 		const messagesBody = [
 			$settings.system
@@ -358,7 +369,8 @@
 			options: {
 				...($settings.options ?? {})
 			},
-			format: $settings.requestFormat ?? undefined
+			format: $settings.requestFormat ?? undefined,
+			keep_alive: $settings.keepAlive ?? undefined
 		});
 
 		if (res && res.ok) {
@@ -437,7 +449,7 @@
 														selectedModelfile.title.charAt(0).toUpperCase() +
 														selectedModelfile.title.slice(1)
 												  }`
-												: `Ollama - ${model}`,
+												: `${model}`,
 											{
 												body: responseMessage.content,
 												icon: selectedModelfile?.imageUrl ?? '/favicon.png'
@@ -466,7 +478,7 @@
 				}
 
 				if (autoScroll) {
-					window.scrollTo({ top: document.body.scrollHeight });
+					scrollToBottom();
 				}
 			}
 
@@ -505,7 +517,7 @@
 		await tick();
 
 		if (autoScroll) {
-			window.scrollTo({ top: document.body.scrollHeight });
+			scrollToBottom();
 		}
 
 		if (messages.length == 2 && messages.at(1).content !== '') {
@@ -514,29 +526,9 @@
 		}
 	};
 
-	const sendPromptOpenAI = async (model, userPrompt, parentId, _chatId) => {
-		let responseMessageId = uuidv4();
-
-		let responseMessage = {
-			parentId: parentId,
-			id: responseMessageId,
-			childrenIds: [],
-			role: 'assistant',
-			content: '',
-			model: model,
-			timestamp: Math.floor(Date.now() / 1000) // Unix epoch
-		};
-
-		history.messages[responseMessageId] = responseMessage;
-		history.currentId = responseMessageId;
-		if (parentId !== null) {
-			history.messages[parentId].childrenIds = [
-				...history.messages[parentId].childrenIds,
-				responseMessageId
-			];
-		}
-
-		window.scrollTo({ top: document.body.scrollHeight });
+	const sendPromptOpenAI = async (model, userPrompt, responseMessageId, _chatId) => {
+		const responseMessage = history.messages[responseMessageId];
+		scrollToBottom();
 
 		const res = await generateOpenAIChatCompletion(localStorage.token, {
 			model: model,
@@ -644,7 +636,7 @@
 				}
 
 				if (autoScroll) {
-					window.scrollTo({ top: document.body.scrollHeight });
+					scrollToBottom();
 				}
 			}
 
@@ -688,7 +680,7 @@
 		await tick();
 
 		if (autoScroll) {
-			window.scrollTo({ top: document.body.scrollHeight });
+			scrollToBottom();
 		}
 
 		if (messages.length == 2) {
@@ -712,6 +704,37 @@
 			let userPrompt = userMessage.content;
 
 			await sendPrompt(userPrompt, userMessage.id);
+		}
+	};
+
+	const continueGeneration = async () => {
+		console.log('continueGeneration');
+		const _chatId = JSON.parse(JSON.stringify($chatId));
+
+		if (messages.length != 0 && messages.at(-1).done == true) {
+			const responseMessage = history.messages[history.currentId];
+			responseMessage.done = false;
+			await tick();
+
+			const modelTag = $models.filter((m) => m.name === responseMessage.model).at(0);
+
+			if (modelTag?.external) {
+				await sendPromptOpenAI(
+					responseMessage.model,
+					history.messages[responseMessage.parentId].content,
+					responseMessage.id,
+					_chatId
+				);
+			} else if (modelTag) {
+				await sendPromptOllama(
+					responseMessage.model,
+					history.messages[responseMessage.parentId].content,
+					responseMessage.id,
+					_chatId
+				);
+			} else {
+				toast.error(`Model ${model} not found`);
+			}
 		}
 	};
 
@@ -771,42 +794,52 @@
 	};
 </script>
 
-<svelte:window
-	on:scroll={(e) => {
-		autoScroll = window.innerHeight + window.scrollY >= document.body.offsetHeight - 40;
-	}}
-/>
+<div class="h-screen max-h-[100dvh] w-full flex flex-col">
+	<Navbar {title} shareEnabled={messages.length > 0} {initNewChat} {tags} {addTag} {deleteTag} />
+	<div class="flex flex-col flex-auto">
+		<div
+			class=" pb-2.5 flex flex-col justify-between w-full flex-auto overflow-auto h-0"
+			id="messages-container"
+			on:scroll={(e) => {
+				autoScroll = e.target.scrollHeight - e.target.scrollTop <= e.target.clientHeight + 50;
+			}}
+		>
+			<div
+				class="{$settings?.fullScreenMode ?? null
+					? 'max-w-full'
+					: 'max-w-2xl md:px-0'} mx-auto w-full px-4"
+			>
+				<ModelSelector
+					bind:selectedModels
+					disabled={messages.length > 0 && !selectedModels.includes('')}
+				/>
+			</div>
 
-<Navbar {title} shareEnabled={messages.length > 0} {initNewChat} {tags} {addTag} {deleteTag} />
-<div class="min-h-screen w-full flex justify-center">
-	<div class=" py-2.5 flex flex-col justify-between w-full">
-		<div class="max-w-2xl mx-auto w-full px-3 md:px-0 mt-10">
-			<ModelSelector bind:selectedModels disabled={messages.length > 0} />
+			<div class=" h-full w-full flex flex-col py-8">
+				<Messages
+					chatId={$chatId}
+					{selectedModels}
+					{selectedModelfiles}
+					{processing}
+					bind:history
+					bind:messages
+					bind:autoScroll
+					bottomPadding={files.length > 0}
+					{sendPrompt}
+					{continueGeneration}
+					{regenerateResponse}
+				/>
+			</div>
 		</div>
 
-		<div class=" h-full mt-10 mb-32 w-full flex flex-col">
-			<Messages
-				chatId={$chatId}
-				{selectedModels}
-				{selectedModelfiles}
-				{processing}
-				bind:history
-				bind:messages
-				bind:autoScroll
-				bottomPadding={files.length > 0}
-				{sendPrompt}
-				{regenerateResponse}
-			/>
-		</div>
+		<MessageInput
+			bind:files
+			bind:prompt
+			bind:autoScroll
+			suggestionPrompts={selectedModelfile?.suggestionPrompts ?? $config.default_prompt_suggestions}
+			{messages}
+			{submitPrompt}
+			{stopResponse}
+		/>
 	</div>
-
-	<MessageInput
-		bind:files
-		bind:prompt
-		bind:autoScroll
-		suggestionPrompts={selectedModelfile?.suggestionPrompts ?? $config.default_prompt_suggestions}
-		{messages}
-		{submitPrompt}
-		{stopResponse}
-	/>
 </div>

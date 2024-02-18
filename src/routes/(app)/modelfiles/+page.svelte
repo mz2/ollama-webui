@@ -35,9 +35,9 @@
 	};
 
 	const shareModelfile = async (modelfile) => {
-		toast.success('Redirecting you to OllamaHub');
+		toast.success('Redirecting you to OpenWebUI Community');
 
-		const url = 'https://ollamahub.com';
+		const url = 'https://openwebui.com';
 
 		const tab = await window.open(`${url}/modelfiles/create`, '_blank');
 		window.addEventListener(
@@ -68,8 +68,8 @@
 	});
 </script>
 
-<div class="min-h-screen w-full flex justify-center dark:text-white">
-	<div class=" py-2.5 flex flex-col justify-between w-full">
+<div class="min-h-screen max-h-[100dvh] w-full flex justify-center dark:text-white">
+	<div class=" py-2.5 flex flex-col justify-between w-full overflow-y-auto">
 		<div class="max-w-2xl mx-auto w-full px-3 md:px-0 my-10">
 			<div class=" text-2xl font-semibold mb-6">My Modelfiles</div>
 
@@ -348,11 +348,11 @@
 			</div>
 
 			<div class=" my-16">
-				<div class=" text-2xl font-semibold mb-6">Made by OllamaHub Community</div>
+				<div class=" text-2xl font-semibold mb-6">Made by OpenWebUI Community</div>
 
 				<a
 					class=" flex space-x-4 cursor-pointer w-full mb-3"
-					href="https://ollamahub.com/"
+					href="https://openwebui.com/"
 					target="_blank"
 				>
 					<div class=" self-center w-10">

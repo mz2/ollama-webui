@@ -4,7 +4,7 @@
 	const { saveAs } = fileSaver;
 
 	import { getChatById } from '$lib/apis/chats';
-	import { chatId, modelfiles } from '$lib/stores';
+	import { chatId, modelfiles, settings } from '$lib/stores';
 	import ShareChatModal from '../chat/ShareChatModal.svelte';
 	import TagInput from '../common/Tags/TagInput.svelte';
 	import Tags from '../common/Tags.svelte';
@@ -27,8 +27,8 @@
 		const chat = (await getChatById(localStorage.token, $chatId)).chat;
 		console.log('share', chat);
 
-		toast.success('Redirecting you to OllamaHub');
-		const url = 'https://ollamahub.com';
+		toast.success('Redirecting you to OpenWebUI Community');
+		const url = 'https://openwebui.com';
 		// const url = 'http://localhost:5173';
 
 		const tab = await window.open(`${url}/chats/upload`, '_blank');
@@ -69,9 +69,13 @@
 <ShareChatModal bind:show={showShareChatModal} {downloadChat} {shareChat} />
 <nav
 	id="nav"
-	class=" fixed py-2.5 top-0 flex flex-row justify-center bg-white/95 dark:bg-gray-900/90 dark:text-gray-200 backdrop-blur-xl w-screen z-30"
+	class=" sticky py-2.5 top-0 flex flex-row justify-center bg-white/95 dark:bg-gray-900/90 dark:text-gray-200 backdrop-blur-xl z-30"
 >
-	<div class=" flex max-w-3xl w-full mx-auto px-3">
+	<div
+		class=" flex {$settings?.fullScreenMode ?? null
+			? 'max-w-full'
+			: 'max-w-3xl'}  w-full mx-auto px-3"
+	>
 		<div class="flex items-center w-full max-w-full">
 			<div class="pr-2 self-start">
 				<button
