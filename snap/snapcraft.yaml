@@ -1,10 +1,10 @@
 ---
-name: ollama-webui
+name: open-webui
 base: core22
 version: '0'  # no released version yet
-summary: ChatGPT-Style Web UI Client for Ollama 🦙
+summary: ChatGPT-Style Web UI Client for Ollama 🦙 (formerly Ollama WebUI)
 description: |
-  The Ollama Web UI consists of two primary components:
+  The Open WebUI consists of two primary components:
   the frontend and the backend (which serves as a reverse proxy,
   handling static frontend files, and additional features).
   Both are set up.
@@ -19,7 +19,7 @@ architectures:
     build-for: [arm64]
 
 apps:
-  ollama-webui:
+  open-webui:
     command: bin/run-snap.sh
     plugs:
       - home
@@ -81,6 +81,7 @@ parts:
       - python3.10-dev
       - python3-pip
       - git
+      - execstack
     stage-packages:
       - python3.10
       - python3.10-venv
@@ -95,3 +96,14 @@ parts:
       craftctl default
       pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu --no-cache-dir
       cp -r backend $CRAFT_PART_INSTALL
+    override-prime: |
+      craftctl default
+
+      # libctranslate2.so... is caught with an executable stack (something to investigate)
+      # for now forcibly cleared below.
+      #
+      # see https://forum.snapcraft.io/t/snap-and-executable-stacks/1812 for more info on the check
+      for f in `find $CRAFT_PRIME | grep -e libctranslate2.*\.so\..*`; do
+        strip --strip-all $f;
+        execstack --clear-execstack $f;
+      done
