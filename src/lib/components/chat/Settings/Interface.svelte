@@ -3,7 +3,7 @@
 	import { setDefaultPromptSuggestions } from '$lib/apis/configs';
 	import { config, models, user } from '$lib/stores';
 	import { createEventDispatcher, onMount } from 'svelte';
-	import toast from 'svelte-french-toast';
+	import { toast } from 'svelte-sonner';
 	const dispatch = createEventDispatcher();
 
 	export let saveSettings: Function;
@@ -13,6 +13,7 @@
 	let responseAutoCopy = false;
 	let titleAutoGenerateModel = '';
 	let fullScreenMode = false;
+	let titleGenerationPrompt = '';
 
 	// Interface
 	let promptSuggestions = [];
@@ -56,8 +57,14 @@
 	};
 
 	const updateInterfaceHandler = async () => {
-		promptSuggestions = await setDefaultPromptSuggestions(localStorage.token, promptSuggestions);
-		await config.set(await getBackendConfig());
+		if ($user.role === 'admin') {
+			promptSuggestions = await setDefaultPromptSuggestions(localStorage.token, promptSuggestions);
+			await config.set(await getBackendConfig());
+		}
+
+		saveSettings({
+			titleGenerationPrompt: titleGenerationPrompt ? titleGenerationPrompt : undefined
+		});
 	};
 
 	onMount(async () => {
@@ -72,6 +79,9 @@
 		showUsername = settings.showUsername ?? false;
 		fullScreenMode = settings.fullScreenMode ?? false;
 		titleAutoGenerateModel = settings.titleAutoGenerateModel ?? '';
+		titleGenerationPrompt =
+			settings.titleGenerationPrompt ??
+			`Create a concise, 3-5 word phrase as a header for the following query, strictly adhering to the 3-5 word limit and avoiding the use of the word 'title': {{prompt}}`;
 	});
 </script>
 
@@ -181,10 +191,12 @@
 						placeholder="Select a model"
 					>
 						<option value="" selected>Current Model</option>
-						{#each $models.filter((m) => m.size != null) as model}
-							<option value={model.name} class="bg-gray-100 dark:bg-gray-700"
-								>{model.name + ' (' + (model.size / 1024 ** 3).toFixed(1) + ' GB)'}</option
-							>
+						{#each $models as model}
+							{#if model.size != null}
+								<option value={model.name} class="bg-gray-100 dark:bg-gray-700">
+									{model.name + ' (' + (model.size / 1024 ** 3).toFixed(1) + ' GB)'}
+								</option>
+							{/if}
 						{/each}
 					</select>
 				</div>
@@ -211,6 +223,14 @@
 						/>
 					</svg>
 				</button>
+			</div>
+			<div class="mt-3">
+				<div class=" mb-2.5 text-sm font-medium">Title Generation Prompt</div>
+				<textarea
+					bind:value={titleGenerationPrompt}
+					class="w-full rounded p-4 text-sm dark:text-gray-300 dark:bg-gray-800 outline-none resize-none"
+					rows="3"
+				/>
 			</div>
 		</div>
 
