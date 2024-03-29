@@ -5,9 +5,12 @@ STATUS=$(systemctl is-active $SERVICE_NAME)
 HOST=$(snapctl get host)
 PORT=$(snapctl get port)
 
-#if $SERVICE_NAME is active, then
+$SERVICE_INFO=$(snapctl services $SNAP_INSTANCE_NAME.listener)
 
-if [ $STATUS == "active" ]; then
+echo $SERVICE_INFO
+STATUS=$(echo $SERVICE_INFO | awk /open-webui.listener/{print $3})
+
+if [[ "$STATUS" == "active" ]]; then
   echo "Open $SNAP_INSTANCE_NAME in your browser at the following URL: http://$HOST:$PORT"
   echo ""
 else
