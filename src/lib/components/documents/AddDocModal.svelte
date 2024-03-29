@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { toast } from 'svelte-sonner';
 	import dayjs from 'dayjs';
-	import { onMount } from 'svelte';
+	import { onMount, getContext } from 'svelte';
 
 	import { createNewDoc, getDocs, tagDocByName, updateDocByName } from '$lib/apis/documents';
 	import Modal from '../common/Modal.svelte';
@@ -13,9 +13,11 @@
 	import { transformFileName } from '$lib/utils';
 	import { SUPPORTED_FILE_EXTENSIONS, SUPPORTED_FILE_TYPE } from '$lib/constants';
 
+	const i18n = getContext('i18n');
+
 	export let show = false;
 	export let selectedDoc;
-
+	let uploadDocInputElement: HTMLInputElement;
 	let inputFiles;
 	let tags = [];
 
@@ -69,9 +71,9 @@
 			}
 
 			inputFiles = null;
-			document.getElementById('upload-doc-input').value = '';
+			uploadDocInputElement.value = '';
 		} else {
-			toast.error(`File not found.`);
+			toast.error($i18n.t(`File not found.`));
 		}
 
 		show = false;
@@ -96,7 +98,7 @@
 <Modal size="sm" bind:show>
 	<div>
 		<div class=" flex justify-between dark:text-gray-300 px-5 py-4">
-			<div class=" text-lg font-medium self-center">Add Docs</div>
+			<div class=" text-lg font-medium self-center">{$i18n.t('Add Docs')}</div>
 			<button
 				class="self-center"
 				on:click={() => {
@@ -126,26 +128,33 @@
 					}}
 				>
 					<div class="mb-3 w-full">
-						<input id="upload-doc-input" hidden bind:files={inputFiles} type="file" multiple />
+						<input
+							id="upload-doc-input"
+							bind:this={uploadDocInputElement}
+							hidden
+							bind:files={inputFiles}
+							type="file"
+							multiple
+						/>
 
 						<button
-							class="w-full text-sm font-medium py-3 bg-gray-850 hover:bg-gray-800 text-center rounded-xl"
+							class="w-full text-sm font-medium py-3 bg-gray-100 hover:bg-gray-200 dark:bg-gray-850 dark:hover:bg-gray-800 text-center rounded-xl"
 							type="button"
 							on:click={() => {
-								document.getElementById('upload-doc-input')?.click();
+								uploadDocInputElement.click();
 							}}
 						>
 							{#if inputFiles}
 								{inputFiles.length > 0 ? `${inputFiles.length}` : ''} document(s) selected.
 							{:else}
-								Click here to select documents.
+								{$i18n.t('Click here to select documents.')}
 							{/if}
 						</button>
 					</div>
 
 					<div class=" flex flex-col space-y-1.5">
 						<div class="flex flex-col w-full">
-							<div class=" mb-1.5 text-xs text-gray-500">Tags</div>
+							<div class=" mb-1.5 text-xs text-gray-500">{$i18n.t('Tags')}</div>
 
 							<Tags {tags} addTag={addTagHandler} deleteTag={deleteTagHandler} />
 						</div>
@@ -156,7 +165,7 @@
 							class=" px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-gray-100 transition rounded"
 							type="submit"
 						>
-							Save
+							{$i18n.t('Save')}
 						</button>
 					</div>
 				</form>

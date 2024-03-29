@@ -8,7 +8,7 @@ from fastapi import (
     Form,
 )
 from fastapi.middleware.cors import CORSMiddleware
-import os, shutil
+import os, shutil, logging
 
 from pathlib import Path
 from typing import List
@@ -44,6 +44,8 @@ from apps.web.models.documents import (
     DocumentResponse,
 )
 
+from apps.rag.utils import query_doc, query_collection
+
 from utils.misc import (
     calculate_sha256,
     calculate_sha256_string,
@@ -52,6 +54,7 @@ from utils.misc import (
 )
 from utils.utils import get_current_user, get_admin_user
 from config import (
+    SRC_LOG_LEVELS,
     UPLOAD_DIR,
     DOCS_DIR,
     RAG_EMBEDDING_MODEL,
@@ -64,6 +67,9 @@ from config import (
 
 from constants import ERROR_MESSAGES
 
+log = logging.getLogger(__name__)
+log.setLevel(SRC_LOG_LEVELS["RAG"])
+
 #
 # if RAG_EMBEDDING_MODEL:
 #    sentence_transformer_ef = SentenceTransformer(
@@ -75,10 +81,13 @@ from constants import ERROR_MESSAGES
 
 app = FastAPI()
 
+app.state.PDF_EXTRACT_IMAGES = False
 app.state.CHUNK_SIZE = CHUNK_SIZE
 app.state.CHUNK_OVERLAP = CHUNK_OVERLAP
 app.state.RAG_TEMPLATE = RAG_TEMPLATE
 app.state.RAG_EMBEDDING_MODEL = RAG_EMBEDDING_MODEL
+app.state.TOP_K = 4
+
 app.state.sentence_transformer_ef = (
     embedding_functions.SentenceTransformerEmbeddingFunction(
         model_name=app.state.RAG_EMBEDDING_MODEL,
@@ -104,34 +113,6 @@ class CollectionNameForm(BaseModel):
 
 class StoreWebForm(CollectionNameForm):
     url: str
-
-
-def store_data_in_vector_db(data, collection_name) -> bool:
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=app.state.CHUNK_SIZE, chunk_overlap=app.state.CHUNK_OVERLAP
-    )
-    docs = text_splitter.split_documents(data)
-
-    texts = [doc.page_content for doc in docs]
-    metadatas = [doc.metadata for doc in docs]
-
-    try:
-        collection = CHROMA_CLIENT.create_collection(
-            name=collection_name,
-            embedding_function=app.state.sentence_transformer_ef,
-        )
-
-        collection.add(
-            documents=texts, metadatas=metadatas, ids=[str(uuid.uuid1()) for _ in texts]
-        )
-        return True
-    except Exception as e:
-        print(e)
-        if e.__class__.__name__ == "UniqueConstraintError":
-            return True
-
-        return False
-
 
 @app.get("/")
 async def get_status():
@@ -174,12 +155,15 @@ async def update_embedding_model(
     }
 
 
-@app.get("/chunk")
-async def get_chunk_params(user=Depends(get_admin_user)):
+@app.get("/config")
+async def get_rag_config(user=Depends(get_admin_user)):
     return {
         "status": True,
-        "chunk_size": app.state.CHUNK_SIZE,
-        "chunk_overlap": app.state.CHUNK_OVERLAP,
+        "pdf_extract_images": app.state.PDF_EXTRACT_IMAGES,
+        "chunk": {
+            "chunk_size": app.state.CHUNK_SIZE,
+            "chunk_overlap": app.state.CHUNK_OVERLAP,
+        },
     }
 
 
@@ -188,17 +172,24 @@ class ChunkParamUpdateForm(BaseModel):
     chunk_overlap: int
 
 
-@app.post("/chunk/update")
-async def update_chunk_params(
-    form_data: ChunkParamUpdateForm, user=Depends(get_admin_user)
-):
-    app.state.CHUNK_SIZE = form_data.chunk_size
-    app.state.CHUNK_OVERLAP = form_data.chunk_overlap
+class ConfigUpdateForm(BaseModel):
+    pdf_extract_images: bool
+    chunk: ChunkParamUpdateForm
+
+
+@app.post("/config/update")
+async def update_rag_config(form_data: ConfigUpdateForm, user=Depends(get_admin_user)):
+    app.state.PDF_EXTRACT_IMAGES = form_data.pdf_extract_images
+    app.state.CHUNK_SIZE = form_data.chunk.chunk_size
+    app.state.CHUNK_OVERLAP = form_data.chunk.chunk_overlap
 
     return {
         "status": True,
-        "chunk_size": app.state.CHUNK_SIZE,
-        "chunk_overlap": app.state.CHUNK_OVERLAP,
+        "pdf_extract_images": app.state.PDF_EXTRACT_IMAGES,
+        "chunk": {
+            "chunk_size": app.state.CHUNK_SIZE,
+            "chunk_overlap": app.state.CHUNK_OVERLAP,
+        },
     }
 
 
@@ -210,40 +201,50 @@ async def get_rag_template(user=Depends(get_current_user)):
     }
 
 
-class RAGTemplateForm(BaseModel):
-    template: str
+@app.get("/query/settings")
+async def get_query_settings(user=Depends(get_admin_user)):
+    return {
+        "status": True,
+        "template": app.state.RAG_TEMPLATE,
+        "k": app.state.TOP_K,
+    }
 
 
-@app.post("/template/update")
-async def update_rag_template(form_data: RAGTemplateForm, user=Depends(get_admin_user)):
-    # TODO: check template requirements
-    app.state.RAG_TEMPLATE = (
-        form_data.template if form_data.template != "" else RAG_TEMPLATE
-    )
+class QuerySettingsForm(BaseModel):
+    k: Optional[int] = None
+    template: Optional[str] = None
+
+
+@app.post("/query/settings/update")
+async def update_query_settings(
+    form_data: QuerySettingsForm, user=Depends(get_admin_user)
+):
+    app.state.RAG_TEMPLATE = form_data.template if form_data.template else RAG_TEMPLATE
+    app.state.TOP_K = form_data.k if form_data.k else 4
     return {"status": True, "template": app.state.RAG_TEMPLATE}
 
 
 class QueryDocForm(BaseModel):
     collection_name: str
     query: str
-    k: Optional[int] = 4
+    k: Optional[int] = None
 
 
 @app.post("/query/doc")
-def query_doc(
+def query_doc_handler(
     form_data: QueryDocForm,
     user=Depends(get_current_user),
 ):
+
     try:
-        # if you use docker use the model from the environment variable
-        collection = CHROMA_CLIENT.get_collection(
-            name=form_data.collection_name,
+        return query_doc(
+            collection_name=form_data.collection_name,
+            query=form_data.query,
+            k=form_data.k if form_data.k else app.state.TOP_K,
             embedding_function=app.state.sentence_transformer_ef,
         )
-        result = collection.query(query_texts=[form_data.query], n_results=form_data.k)
-        return result
     except Exception as e:
-        print(e)
+        log.exception(e)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=ERROR_MESSAGES.DEFAULT(e),
@@ -253,77 +254,20 @@ def query_doc(
 class QueryCollectionsForm(BaseModel):
     collection_names: List[str]
     query: str
-    k: Optional[int] = 4
-
-
-def merge_and_sort_query_results(query_results, k):
-    # Initialize lists to store combined data
-    combined_ids = []
-    combined_distances = []
-    combined_metadatas = []
-    combined_documents = []
-
-    # Combine data from each dictionary
-    for data in query_results:
-        combined_ids.extend(data["ids"][0])
-        combined_distances.extend(data["distances"][0])
-        combined_metadatas.extend(data["metadatas"][0])
-        combined_documents.extend(data["documents"][0])
-
-    # Create a list of tuples (distance, id, metadata, document)
-    combined = list(
-        zip(combined_distances, combined_ids, combined_metadatas, combined_documents)
-    )
-
-    # Sort the list based on distances
-    combined.sort(key=lambda x: x[0])
-
-    # Unzip the sorted list
-    sorted_distances, sorted_ids, sorted_metadatas, sorted_documents = zip(*combined)
-
-    # Slicing the lists to include only k elements
-    sorted_distances = list(sorted_distances)[:k]
-    sorted_ids = list(sorted_ids)[:k]
-    sorted_metadatas = list(sorted_metadatas)[:k]
-    sorted_documents = list(sorted_documents)[:k]
-
-    # Create the output dictionary
-    merged_query_results = {
-        "ids": [sorted_ids],
-        "distances": [sorted_distances],
-        "metadatas": [sorted_metadatas],
-        "documents": [sorted_documents],
-        "embeddings": None,
-        "uris": None,
-        "data": None,
-    }
-
-    return merged_query_results
+    k: Optional[int] = None
 
 
 @app.post("/query/collection")
-def query_collection(
+def query_collection_handler(
     form_data: QueryCollectionsForm,
     user=Depends(get_current_user),
 ):
-    results = []
-
-    for collection_name in form_data.collection_names:
-        try:
-            # if you use docker use the model from the environment variable
-            collection = CHROMA_CLIENT.get_collection(
-                name=collection_name,
-                embedding_function=app.state.sentence_transformer_ef,
-            )
-
-            result = collection.query(
-                query_texts=[form_data.query], n_results=form_data.k
-            )
-            results.append(result)
-        except:
-            pass
-
-    return merge_and_sort_query_results(results, form_data.k)
+    return query_collection(
+        collection_names=form_data.collection_names,
+        query=form_data.query,
+        k=form_data.k if form_data.k else app.state.TOP_K,
+        embedding_function=app.state.sentence_transformer_ef,
+    )
 
 
 @app.post("/web")
@@ -337,18 +281,68 @@ def store_web(form_data: StoreWebForm, user=Depends(get_current_user)):
         if collection_name == "":
             collection_name = calculate_sha256_string(form_data.url)[:63]
 
-        store_data_in_vector_db(data, collection_name)
+        store_data_in_vector_db(data, collection_name, overwrite=True)
         return {
             "status": True,
             "collection_name": collection_name,
             "filename": form_data.url,
         }
     except Exception as e:
-        print(e)
+        log.exception(e)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=ERROR_MESSAGES.DEFAULT(e),
         )
+
+
+def store_data_in_vector_db(data, collection_name, overwrite: bool = False) -> bool:
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=app.state.CHUNK_SIZE,
+        chunk_overlap=app.state.CHUNK_OVERLAP,
+        add_start_index=True,
+    )
+    docs = text_splitter.split_documents(data)
+    return store_docs_in_vector_db(docs, collection_name, overwrite)
+
+
+def store_text_in_vector_db(
+    text, metadata, collection_name, overwrite: bool = False
+) -> bool:
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=app.state.CHUNK_SIZE,
+        chunk_overlap=app.state.CHUNK_OVERLAP,
+        add_start_index=True,
+    )
+    docs = text_splitter.create_documents([text], metadatas=[metadata])
+    return store_docs_in_vector_db(docs, collection_name, overwrite)
+
+
+def store_docs_in_vector_db(docs, collection_name, overwrite: bool = False) -> bool:
+    texts = [doc.page_content for doc in docs]
+    metadatas = [doc.metadata for doc in docs]
+
+    try:
+        if overwrite:
+            for collection in CHROMA_CLIENT.list_collections():
+                if collection_name == collection.name:
+                    print(f"deleting existing collection {collection_name}")
+                    CHROMA_CLIENT.delete_collection(name=collection_name)
+
+        collection = CHROMA_CLIENT.create_collection(
+            name=collection_name,
+            embedding_function=app.state.sentence_transformer_ef,
+        )
+
+        collection.add(
+            documents=texts, metadatas=metadatas, ids=[str(uuid.uuid1()) for _ in texts]
+        )
+        return True
+    except Exception as e:
+        print(e)
+        if e.__class__.__name__ == "UniqueConstraintError":
+            return True
+
+        return False
 
 
 def get_loader(filename: str, file_content_type: str, file_path: str):
@@ -401,7 +395,7 @@ def get_loader(filename: str, file_content_type: str, file_path: str):
     ]
 
     if file_ext == "pdf":
-        loader = PyPDFLoader(file_path)
+        loader = PyPDFLoader(file_path, extract_images=app.state.PDF_EXTRACT_IMAGES)
     elif file_ext == "csv":
         loader = CSVLoader(file_path)
     elif file_ext == "rst":
@@ -423,10 +417,12 @@ def get_loader(filename: str, file_content_type: str, file_path: str):
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     ] or file_ext in ["xls", "xlsx"]:
         loader = UnstructuredExcelLoader(file_path)
-    elif file_ext in known_source_ext or (file_content_type and file_content_type.find("text/") >= 0):
-        loader = TextLoader(file_path)
+    elif file_ext in known_source_ext or (
+        file_content_type and file_content_type.find("text/") >= 0
+    ):
+        loader = TextLoader(file_path, autodetect_encoding=True)
     else:
-        loader = TextLoader(file_path)
+        loader = TextLoader(file_path, autodetect_encoding=True)
         known_type = False
 
     return loader, known_type
@@ -440,7 +436,7 @@ def store_doc(
 ):
     # "https://www.gutenberg.org/files/1727/1727-h/1727-h.htm"
 
-    print(file.content_type)
+    log.info(f"file.content_type: {file.content_type}")
     try:
         filename = file.filename
         file_path = f"{UPLOAD_DIR}/{filename}"
@@ -471,7 +467,7 @@ def store_doc(
                 detail=ERROR_MESSAGES.DEFAULT(),
             )
     except Exception as e:
-        print(e)
+        log.exception(e)
         if "No pandoc was found" in str(e):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -482,6 +478,37 @@ def store_doc(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=ERROR_MESSAGES.DEFAULT(e),
             )
+
+
+class TextRAGForm(BaseModel):
+    name: str
+    content: str
+    collection_name: Optional[str] = None
+
+
+@app.post("/text")
+def store_text(
+    form_data: TextRAGForm,
+    user=Depends(get_current_user),
+):
+
+    collection_name = form_data.collection_name
+    if collection_name == None:
+        collection_name = calculate_sha256_string(form_data.content)
+
+    result = store_text_in_vector_db(
+        form_data.content,
+        metadata={"name": form_data.name, "created_by": user.id},
+        collection_name=collection_name,
+    )
+
+    if result:
+        return {"status": True, "collection_name": collection_name}
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=ERROR_MESSAGES.DEFAULT(),
+        )
 
 
 @app.get("/scan")
@@ -536,7 +563,7 @@ def scan_docs_dir(user=Depends(get_admin_user)):
                         )
 
         except Exception as e:
-            print(e)
+            log.exception(e)
 
     return True
 
@@ -557,11 +584,11 @@ def reset(user=Depends(get_admin_user)) -> bool:
             elif os.path.isdir(file_path):
                 shutil.rmtree(file_path)
         except Exception as e:
-            print("Failed to delete %s. Reason: %s" % (file_path, e))
+            log.error("Failed to delete %s. Reason: %s" % (file_path, e))
 
     try:
         CHROMA_CLIENT.reset()
     except Exception as e:
-        print(e)
+        log.exception(e)
 
     return True

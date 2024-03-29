@@ -1,8 +1,11 @@
 <script lang="ts">
 	import { setDefaultModels } from '$lib/apis/configs';
 	import { models, showSettings, settings, user } from '$lib/stores';
-	import { onMount, tick } from 'svelte';
+	import { onMount, tick, getContext } from 'svelte';
 	import { toast } from 'svelte-sonner';
+	import Select from '../common/Select.svelte';
+
+	const i18n = getContext('i18n');
 
 	export let selectedModels = [''];
 	export let disabled = false;
@@ -10,7 +13,7 @@
 	const saveDefaultModel = async () => {
 		const hasEmptyModel = selectedModels.filter((it) => it === '');
 		if (hasEmptyModel.length) {
-			toast.error('Choose a model before saving...');
+			toast.error($i18n.t('Choose a model before saving...'));
 			return;
 		}
 		settings.set({ ...$settings, models: selectedModels });
@@ -20,7 +23,7 @@
 			console.log('setting default models globally');
 			await setDefaultModels(localStorage.token, selectedModels.join(','));
 		}
-		toast.success('Default model updated');
+		toast.success($i18n.t('Default model updated'));
 	};
 
 	$: if (selectedModels.length > 0 && $models.length > 0) {
@@ -30,28 +33,24 @@
 	}
 </script>
 
-<div class="flex flex-col my-2">
+<div class="flex flex-col my-2 w-full">
 	{#each selectedModels as selectedModel, selectedModelIdx}
-		<div class="flex">
-			<select
-				id="models"
-				class="outline-none bg-transparent text-lg font-semibold rounded-lg block w-full placeholder-gray-400"
-				bind:value={selectedModel}
-				{disabled}
-			>
-				<option class=" text-gray-700" value="" selected disabled>Select a model</option>
-
-				{#each $models as model}
-					{#if model.name === 'hr'}
-						<hr />
-					{:else}
-						<option value={model.id} class="text-gray-700 text-lg"
-							>{model.name +
-								`${model.size ? ` (${(model.size / 1024 ** 3).toFixed(1)}GB)` : ''}`}</option
-						>
-					{/if}
-				{/each}
-			</select>
+		<div class="flex w-full">
+			<div class="overflow-hidden w-full">
+				<div class="mr-2 max-w-full">
+					<Select
+						placeholder={$i18n.t('Select a model')}
+						items={$models
+							.filter((model) => model.name !== 'hr')
+							.map((model) => ({
+								value: model.id,
+								label:
+									model.name + `${model.size ? ` (${(model.size / 1024 ** 3).toFixed(1)}GB)` : ''}`
+							}))}
+						bind:value={selectedModel}
+					/>
+				</div>
+			</div>
 
 			{#if selectedModelIdx === 0}
 				<button
@@ -132,6 +131,6 @@
 	{/each}
 </div>
 
-<div class="text-left mt-1.5 text-xs text-gray-500">
-	<button on:click={saveDefaultModel}> Set as default</button>
+<div class="text-left mt-1.5 ml-1 text-xs text-gray-500">
+	<button on:click={saveDefaultModel}> {$i18n.t('Set as default')}</button>
 </div>

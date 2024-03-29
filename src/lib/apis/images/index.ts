@@ -1,9 +1,9 @@
 import { IMAGES_API_BASE_URL } from '$lib/constants';
 
-export const getImageGenerationEnabledStatus = async (token: string = '') => {
+export const getImageGenerationConfig = async (token: string = '') => {
 	let error = null;
 
-	const res = await fetch(`${IMAGES_API_BASE_URL}/enabled`, {
+	const res = await fetch(`${IMAGES_API_BASE_URL}/config`, {
 		method: 'GET',
 		headers: {
 			Accept: 'application/json',
@@ -32,10 +32,50 @@ export const getImageGenerationEnabledStatus = async (token: string = '') => {
 	return res;
 };
 
-export const toggleImageGenerationEnabledStatus = async (token: string = '') => {
+export const updateImageGenerationConfig = async (
+	token: string = '',
+	engine: string,
+	enabled: boolean
+) => {
 	let error = null;
 
-	const res = await fetch(`${IMAGES_API_BASE_URL}/enabled/toggle`, {
+	const res = await fetch(`${IMAGES_API_BASE_URL}/config/update`, {
+		method: 'POST',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			...(token && { authorization: `Bearer ${token}` })
+		},
+		body: JSON.stringify({
+			engine,
+			enabled
+		})
+	})
+		.then(async (res) => {
+			if (!res.ok) throw await res.json();
+			return res.json();
+		})
+		.catch((err) => {
+			console.log(err);
+			if ('detail' in err) {
+				error = err.detail;
+			} else {
+				error = 'Server connection failed';
+			}
+			return null;
+		});
+
+	if (error) {
+		throw error;
+	}
+
+	return res;
+};
+
+export const getOpenAIKey = async (token: string = '') => {
+	let error = null;
+
+	const res = await fetch(`${IMAGES_API_BASE_URL}/key`, {
 		method: 'GET',
 		headers: {
 			Accept: 'application/json',
@@ -61,10 +101,45 @@ export const toggleImageGenerationEnabledStatus = async (token: string = '') => 
 		throw error;
 	}
 
-	return res;
+	return res.OPENAI_API_KEY;
 };
 
-export const getAUTOMATIC1111Url = async (token: string = '') => {
+export const updateOpenAIKey = async (token: string = '', key: string) => {
+	let error = null;
+
+	const res = await fetch(`${IMAGES_API_BASE_URL}/key/update`, {
+		method: 'POST',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			...(token && { authorization: `Bearer ${token}` })
+		},
+		body: JSON.stringify({
+			key: key
+		})
+	})
+		.then(async (res) => {
+			if (!res.ok) throw await res.json();
+			return res.json();
+		})
+		.catch((err) => {
+			console.log(err);
+			if ('detail' in err) {
+				error = err.detail;
+			} else {
+				error = 'Server connection failed';
+			}
+			return null;
+		});
+
+	if (error) {
+		throw error;
+	}
+
+	return res.OPENAI_API_KEY;
+};
+
+export const getImageGenerationEngineUrls = async (token: string = '') => {
 	let error = null;
 
 	const res = await fetch(`${IMAGES_API_BASE_URL}/url`, {
@@ -93,10 +168,10 @@ export const getAUTOMATIC1111Url = async (token: string = '') => {
 		throw error;
 	}
 
-	return res.AUTOMATIC1111_BASE_URL;
+	return res;
 };
 
-export const updateAUTOMATIC1111Url = async (token: string = '', url: string) => {
+export const updateImageGenerationEngineUrls = async (token: string = '', urls: object = {}) => {
 	let error = null;
 
 	const res = await fetch(`${IMAGES_API_BASE_URL}/url/update`, {
@@ -107,7 +182,7 @@ export const updateAUTOMATIC1111Url = async (token: string = '', url: string) =>
 			...(token && { authorization: `Bearer ${token}` })
 		},
 		body: JSON.stringify({
-			url: url
+			...urls
 		})
 	})
 		.then(async (res) => {
@@ -128,7 +203,7 @@ export const updateAUTOMATIC1111Url = async (token: string = '', url: string) =>
 		throw error;
 	}
 
-	return res.AUTOMATIC1111_BASE_URL;
+	return res;
 };
 
 export const getImageSize = async (token: string = '') => {
@@ -263,7 +338,7 @@ export const updateImageSteps = async (token: string = '', steps: number) => {
 	return res.IMAGE_STEPS;
 };
 
-export const getDiffusionModels = async (token: string = '') => {
+export const getImageGenerationModels = async (token: string = '') => {
 	let error = null;
 
 	const res = await fetch(`${IMAGES_API_BASE_URL}/models`, {
@@ -295,7 +370,7 @@ export const getDiffusionModels = async (token: string = '') => {
 	return res;
 };
 
-export const getDefaultDiffusionModel = async (token: string = '') => {
+export const getDefaultImageGenerationModel = async (token: string = '') => {
 	let error = null;
 
 	const res = await fetch(`${IMAGES_API_BASE_URL}/models/default`, {
@@ -327,7 +402,7 @@ export const getDefaultDiffusionModel = async (token: string = '') => {
 	return res.model;
 };
 
-export const updateDefaultDiffusionModel = async (token: string = '', model: string) => {
+export const updateDefaultImageGenerationModel = async (token: string = '', model: string) => {
 	let error = null;
 
 	const res = await fetch(`${IMAGES_API_BASE_URL}/models/default/update`, {

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { toast } from 'svelte-sonner';
-	import { onMount } from 'svelte';
+	import { onMount, getContext } from 'svelte';
 
 	import { user } from '$lib/stores';
 	import { updateUserProfile } from '$lib/apis/auths';
@@ -9,12 +9,15 @@
 	import { getGravatarUrl } from '$lib/apis/utils';
 	import { copyToClipboard } from '$lib/utils';
 
+	const i18n = getContext('i18n');
+
 	export let saveHandler: Function;
 
 	let profileImageUrl = '';
 	let name = '';
 	let showJWTToken = false;
 	let JWTTokenCopied = false;
+	let profileImageInputElement: HTMLInputElement;
 
 	const submitHandler = async () => {
 		const updatedUser = await updateUserProfile(localStorage.token, name, profileImageUrl).catch(
@@ -37,14 +40,15 @@
 </script>
 
 <div class="flex flex-col h-full justify-between text-sm">
-	<div class=" space-y-3 pr-1.5 overflow-y-scroll max-h-80">
+	<div class=" space-y-3 pr-1.5 overflow-y-scroll max-h-[22rem]">
 		<input
 			id="profile-image-input"
+			bind:this={profileImageInputElement}
 			type="file"
 			hidden
 			accept="image/*"
 			on:change={(e) => {
-				const files = e?.target?.files ?? [];
+				const files = profileImageInputElement.files ?? [];
 				let reader = new FileReader();
 				reader.onload = (event) => {
 					let originalImageUrl = `${event.target.result}`;
@@ -86,7 +90,7 @@
 						// Display the compressed image
 						profileImageUrl = compressedSrc;
 
-						e.target.files = null;
+						profileImageInputElement.files = null;
 					};
 				};
 
@@ -99,7 +103,7 @@
 			}}
 		/>
 
-		<div class=" mb-2.5 text-sm font-medium">Profile</div>
+		<div class=" mb-2.5 text-sm font-medium">{$i18n.t('Profile')}</div>
 
 		<div class="flex space-x-5">
 			<div class="flex flex-col">
@@ -108,7 +112,7 @@
 						class="relative rounded-full dark:bg-gray-700"
 						type="button"
 						on:click={() => {
-							document.getElementById('profile-image-input')?.click();
+							profileImageInputElement.click();
 						}}
 					>
 						<img
@@ -141,13 +145,13 @@
 						const url = await getGravatarUrl($user.email);
 
 						profileImageUrl = url;
-					}}>Use Gravatar</button
+					}}>{$i18n.t('Use Gravatar')}</button
 				>
 			</div>
 
 			<div class="flex-1">
 				<div class="flex flex-col w-full">
-					<div class=" mb-1 text-xs text-gray-500">Name</div>
+					<div class=" mb-1 text-xs text-gray-500">{$i18n.t('Name')}</div>
 
 					<div class="flex-1">
 						<input
@@ -168,7 +172,7 @@
 
 		<div class=" w-full justify-between">
 			<div class="flex w-full justify-between">
-				<div class=" self-center text-xs font-medium">JWT Token</div>
+				<div class=" self-center text-xs font-medium">{$i18n.t('JWT Token')}</div>
 			</div>
 
 			<div class="flex mt-2">
@@ -269,7 +273,7 @@
 
 	<div class="flex justify-end pt-3 text-sm font-medium">
 		<button
-			class=" px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-gray-100 transition rounded"
+			class="  px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-gray-100 transition rounded-lg"
 			on:click={async () => {
 				const res = await submitHandler();
 
@@ -278,7 +282,7 @@
 				}
 			}}
 		>
-			Save
+			{$i18n.t('Save')}
 		</button>
 	</div>
 </div>

@@ -1,30 +1,39 @@
 <script lang="ts">
 	import { toast } from 'svelte-sonner';
 
-	import { createEventDispatcher, onMount } from 'svelte';
+	import { createEventDispatcher, onMount, getContext } from 'svelte';
 	import { config, user } from '$lib/stores';
 	import {
-		getAUTOMATIC1111Url,
-		getDefaultDiffusionModel,
-		getDiffusionModels,
-		getImageGenerationEnabledStatus,
+		getImageGenerationModels,
+		getDefaultImageGenerationModel,
+		updateDefaultImageGenerationModel,
 		getImageSize,
-		toggleImageGenerationEnabledStatus,
-		updateAUTOMATIC1111Url,
-		updateDefaultDiffusionModel,
+		getImageGenerationConfig,
+		updateImageGenerationConfig,
+		getImageGenerationEngineUrls,
+		updateImageGenerationEngineUrls,
 		updateImageSize,
 		getImageSteps,
-		updateImageSteps
+		updateImageSteps,
+		getOpenAIKey,
+		updateOpenAIKey
 	} from '$lib/apis/images';
 	import { getBackendConfig } from '$lib/apis';
 	const dispatch = createEventDispatcher();
+
+	const i18n = getContext('i18n');
 
 	export let saveSettings: Function;
 
 	let loading = false;
 
+	let imageGenerationEngine = '';
 	let enableImageGeneration = false;
+
 	let AUTOMATIC1111_BASE_URL = '';
+	let COMFYUI_BASE_URL = '';
+
+	let OPENAI_API_KEY = '';
 
 	let selectedModel = '';
 	let models = null;
@@ -33,62 +42,101 @@
 	let steps = 50;
 
 	const getModels = async () => {
-		models = await getDiffusionModels(localStorage.token).catch((error) => {
+		models = await getImageGenerationModels(localStorage.token).catch((error) => {
 			toast.error(error);
 			return null;
 		});
-		selectedModel = await getDefaultDiffusionModel(localStorage.token).catch((error) => {
+		selectedModel = await getDefaultImageGenerationModel(localStorage.token).catch((error) => {
 			return '';
 		});
 	};
 
-	const updateAUTOMATIC1111UrlHandler = async () => {
-		const res = await updateAUTOMATIC1111Url(localStorage.token, AUTOMATIC1111_BASE_URL).catch(
-			(error) => {
+	const updateUrlHandler = async () => {
+		if (imageGenerationEngine === 'comfyui') {
+			const res = await updateImageGenerationEngineUrls(localStorage.token, {
+				COMFYUI_BASE_URL: COMFYUI_BASE_URL
+			}).catch((error) => {
+				toast.error(error);
+
+				console.log(error);
+				return null;
+			});
+
+			if (res) {
+				COMFYUI_BASE_URL = res.COMFYUI_BASE_URL;
+
+				await getModels();
+
+				if (models) {
+					toast.success($i18n.t('Server connection verified'));
+				}
+			} else {
+				({ COMFYUI_BASE_URL } = await getImageGenerationEngineUrls(localStorage.token));
+			}
+		} else {
+			const res = await updateImageGenerationEngineUrls(localStorage.token, {
+				AUTOMATIC1111_BASE_URL: AUTOMATIC1111_BASE_URL
+			}).catch((error) => {
 				toast.error(error);
 				return null;
+			});
+
+			if (res) {
+				AUTOMATIC1111_BASE_URL = res.AUTOMATIC1111_BASE_URL;
+
+				await getModels();
+
+				if (models) {
+					toast.success($i18n.t('Server connection verified'));
+				}
+			} else {
+				({ AUTOMATIC1111_BASE_URL } = await getImageGenerationEngineUrls(localStorage.token));
 			}
-		);
-
-		if (res) {
-			AUTOMATIC1111_BASE_URL = res;
-
-			await getModels();
-
-			if (models) {
-				toast.success('Server connection verified');
-			}
-		} else {
-			AUTOMATIC1111_BASE_URL = await getAUTOMATIC1111Url(localStorage.token);
 		}
 	};
-	const toggleImageGeneration = async () => {
-		if (AUTOMATIC1111_BASE_URL) {
-			enableImageGeneration = await toggleImageGenerationEnabledStatus(localStorage.token).catch(
-				(error) => {
-					toast.error(error);
-					return false;
-				}
-			);
+	const updateImageGeneration = async () => {
+		const res = await updateImageGenerationConfig(
+			localStorage.token,
+			imageGenerationEngine,
+			enableImageGeneration
+		).catch((error) => {
+			toast.error(error);
+			return null;
+		});
 
-			if (enableImageGeneration) {
-				config.set(await getBackendConfig(localStorage.token));
-				getModels();
-			}
-		} else {
-			enableImageGeneration = false;
-			toast.error('AUTOMATIC1111_BASE_URL not provided');
+		if (res) {
+			imageGenerationEngine = res.engine;
+			enableImageGeneration = res.enabled;
+		}
+
+		if (enableImageGeneration) {
+			config.set(await getBackendConfig(localStorage.token));
+			getModels();
 		}
 	};
 
 	onMount(async () => {
 		if ($user.role === 'admin') {
-			enableImageGeneration = await getImageGenerationEnabledStatus(localStorage.token);
-			AUTOMATIC1111_BASE_URL = await getAUTOMATIC1111Url(localStorage.token);
+			const res = await getImageGenerationConfig(localStorage.token).catch((error) => {
+				toast.error(error);
+				return null;
+			});
 
-			if (enableImageGeneration && AUTOMATIC1111_BASE_URL) {
-				imageSize = await getImageSize(localStorage.token);
-				steps = await getImageSteps(localStorage.token);
+			if (res) {
+				imageGenerationEngine = res.engine;
+				enableImageGeneration = res.enabled;
+			}
+			const URLS = await getImageGenerationEngineUrls(localStorage.token);
+
+			AUTOMATIC1111_BASE_URL = URLS.AUTOMATIC1111_BASE_URL;
+			COMFYUI_BASE_URL = URLS.COMFYUI_BASE_URL;
+
+			OPENAI_API_KEY = await getOpenAIKey(localStorage.token);
+
+			imageSize = await getImageSize(localStorage.token);
+			steps = await getImageSteps(localStorage.token);
+
+			if (enableImageGeneration) {
 				getModels();
 			}
 		}
@@ -99,7 +147,13 @@
 	class="flex flex-col h-full justify-between space-y-3 text-sm"
 	on:submit|preventDefault={async () => {
 		loading = true;
-		await updateDefaultDiffusionModel(localStorage.token, selectedModel);
+
+		if (imageGenerationEngine === 'openai') {
+			await updateOpenAIKey(localStorage.token, OPENAI_API_KEY);
+		}
+
+		await updateDefaultImageGenerationModel(localStorage.token, selectedModel);
+
 		await updateImageSize(localStorage.token, imageSize).catch((error) => {
 			toast.error(error);
 			return null;
@@ -113,25 +167,58 @@
 		loading = false;
 	}}
 >
-	<div class=" space-y-3 pr-1.5 overflow-y-scroll max-h-[20.5rem]">
+	<div class=" space-y-3 pr-1.5 overflow-y-scroll max-h-[24rem]">
 		<div>
-			<div class=" mb-1 text-sm font-medium">Image Settings</div>
+			<div class=" mb-1 text-sm font-medium">{$i18n.t('Image Settings')}</div>
+
+			<div class=" py-0.5 flex w-full justify-between">
+				<div class=" self-center text-xs font-medium">{$i18n.t('Image Generation Engine')}</div>
+				<div class="flex items-center relative">
+					<select
+						class="w-fit pr-8 rounded px-2 p-1 text-xs bg-transparent outline-none text-right"
+						bind:value={imageGenerationEngine}
+						placeholder={$i18n.t('Select a mode')}
+						on:change={async () => {
+							await updateImageGeneration();
+						}}
+					>
+						<option value="">{$i18n.t('Default (Automatic1111)')}</option>
+						<option value="comfyui">{$i18n.t('ComfyUI')}</option>
+						<option value="openai">{$i18n.t('Open AI (Dall-E)')}</option>
+					</select>
+				</div>
+			</div>
 
 			<div>
 				<div class=" py-0.5 flex w-full justify-between">
-					<div class=" self-center text-xs font-medium">Image Generation (Experimental)</div>
+					<div class=" self-center text-xs font-medium">
+						{$i18n.t('Image Generation (Experimental)')}
+					</div>
 
 					<button
 						class="p-1 px-3 text-xs flex rounded transition"
 						on:click={() => {
-							toggleImageGeneration();
+							if (imageGenerationEngine === '' && AUTOMATIC1111_BASE_URL === '') {
+								toast.error($i18n.t('AUTOMATIC1111 Base URL is required.'));
+								enableImageGeneration = false;
+							} else if (imageGenerationEngine === 'comfyui' && COMFYUI_BASE_URL === '') {
+								toast.error($i18n.t('ComfyUI Base URL is required.'));
+								enableImageGeneration = false;
+							} else if (imageGenerationEngine === 'openai' && OPENAI_API_KEY === '') {
+								toast.error($i18n.t('OpenAI API Key is required.'));
+								enableImageGeneration = false;
+							} else {
+								enableImageGeneration = !enableImageGeneration;
+							}
+
+							updateImageGeneration();
 						}}
 						type="button"
 					>
 						{#if enableImageGeneration === true}
-							<span class="ml-2 self-center">On</span>
+							<span class="ml-2 self-center">{$i18n.t('On')}</span>
 						{:else}
-							<span class="ml-2 self-center">Off</span>
+							<span class="ml-2 self-center">{$i18n.t('Off')}</span>
 						{/if}
 					</button>
 				</div>
@@ -139,69 +226,110 @@
 		</div>
 		<hr class=" dark:border-gray-700" />
 
-		<div class=" mb-2.5 text-sm font-medium">AUTOMATIC1111 Base URL</div>
-		<div class="flex w-full">
-			<div class="flex-1 mr-2">
-				<input
-					class="w-full rounded py-2 px-4 text-sm dark:text-gray-300 dark:bg-gray-800 outline-none"
-					placeholder="Enter URL (e.g. http://127.0.0.1:7860/)"
-					bind:value={AUTOMATIC1111_BASE_URL}
-				/>
-			</div>
-			<button
-				class="px-3 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-700 rounded transition"
-				type="button"
-				on:click={() => {
-					// updateOllamaAPIUrlHandler();
-
-					updateAUTOMATIC1111UrlHandler();
-				}}
-			>
-				<svg
-					xmlns="http://www.w3.org/2000/svg"
-					viewBox="0 0 20 20"
-					fill="currentColor"
-					class="w-4 h-4"
-				>
-					<path
-						fill-rule="evenodd"
-						d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.31.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.39zm1.23-3.723a.75.75 0 00.219-.53V2.929a.75.75 0 00-1.5 0V5.36l-.31-.31A7 7 0 003.239 8.188a.75.75 0 101.448.389A5.5 5.5 0 0113.89 6.11l.311.31h-2.432a.75.75 0 000 1.5h4.243a.75.75 0 00.53-.219z"
-						clip-rule="evenodd"
+		{#if imageGenerationEngine === ''}
+			<div class=" mb-2.5 text-sm font-medium">{$i18n.t('AUTOMATIC1111 Base URL')}</div>
+			<div class="flex w-full">
+				<div class="flex-1 mr-2">
+					<input
+						class="w-full rounded-lg py-2 px-4 text-sm dark:text-gray-300 dark:bg-gray-850 outline-none"
+						placeholder={$i18n.t('Enter URL (e.g. http://127.0.0.1:7860/)')}
+						bind:value={AUTOMATIC1111_BASE_URL}
 					/>
-				</svg>
-			</button>
-		</div>
+				</div>
+				<button
+					class="px-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 dark:bg-gray-850 dark:hover:bg-gray-800 dark:text-gray-100 rounded-lg transition"
+					type="button"
+					on:click={() => {
+						updateUrlHandler();
+					}}
+				>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						viewBox="0 0 20 20"
+						fill="currentColor"
+						class="w-4 h-4"
+					>
+						<path
+							fill-rule="evenodd"
+							d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.31.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.39zm1.23-3.723a.75.75 0 00.219-.53V2.929a.75.75 0 00-1.5 0V5.36l-.31-.31A7 7 0 003.239 8.188a.75.75 0 101.448.389A5.5 5.5 0 0113.89 6.11l.311.31h-2.432a.75.75 0 000 1.5h4.243a.75.75 0 00.53-.219z"
+							clip-rule="evenodd"
+						/>
+					</svg>
+				</button>
+			</div>
 
-		<div class="mt-2 text-xs text-gray-400 dark:text-gray-500">
-			Include `--api` flag when running stable-diffusion-webui
-			<a
-				class=" text-gray-300 font-medium"
-				href="https://github.com/AUTOMATIC1111/stable-diffusion-webui/discussions/3734"
-				target="_blank"
-			>
-				(e.g. `sh webui.sh --api`)
-			</a>
-		</div>
+			<div class="mt-2 text-xs text-gray-400 dark:text-gray-500">
+				{$i18n.t('Include `--api` flag when running stable-diffusion-webui')}
+				<a
+					class=" text-gray-300 font-medium"
+					href="https://github.com/AUTOMATIC1111/stable-diffusion-webui/discussions/3734"
+					target="_blank"
+				>
+					{$i18n.t('(e.g. `sh webui.sh --api`)')}
+				</a>
+			</div>
+		{:else if imageGenerationEngine === 'comfyui'}
+			<div class=" mb-2.5 text-sm font-medium">{$i18n.t('ComfyUI Base URL')}</div>
+			<div class="flex w-full">
+				<div class="flex-1 mr-2">
+					<input
+						class="w-full rounded-lg py-2 px-4 text-sm dark:text-gray-300 dark:bg-gray-850 outline-none"
+						placeholder={$i18n.t('Enter URL (e.g. http://127.0.0.1:7860/)')}
+						bind:value={COMFYUI_BASE_URL}
+					/>
+				</div>
+				<button
+					class="px-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 dark:bg-gray-850 dark:hover:bg-gray-800 dark:text-gray-100 rounded-lg transition"
+					type="button"
+					on:click={() => {
+						updateUrlHandler();
+					}}
+				>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						viewBox="0 0 20 20"
+						fill="currentColor"
+						class="w-4 h-4"
+					>
+						<path
+							fill-rule="evenodd"
+							d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.31.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.39zm1.23-3.723a.75.75 0 00.219-.53V2.929a.75.75 0 00-1.5 0V5.36l-.31-.31A7 7 0 003.239 8.188a.75.75 0 101.448.389A5.5 5.5 0 0113.89 6.11l.311.31h-2.432a.75.75 0 000 1.5h4.243a.75.75 0 00.53-.219z"
+							clip-rule="evenodd"
+						/>
+					</svg>
+				</button>
+			</div>
+		{:else if imageGenerationEngine === 'openai'}
+			<div class=" mb-2.5 text-sm font-medium">{$i18n.t('OpenAI API Key')}</div>
+			<div class="flex w-full">
+				<div class="flex-1 mr-2">
+					<input
+						class="w-full rounded-lg py-2 px-4 text-sm dark:text-gray-300 dark:bg-gray-850 outline-none"
+						placeholder={$i18n.t('Enter API Key')}
+						bind:value={OPENAI_API_KEY}
+					/>
+				</div>
+			</div>
+		{/if}
 
 		{#if enableImageGeneration}
 			<hr class=" dark:border-gray-700" />
 
 			<div>
-				<div class=" mb-2.5 text-sm font-medium">Set Default Model</div>
+				<div class=" mb-2.5 text-sm font-medium">{$i18n.t('Set Default Model')}</div>
 				<div class="flex w-full">
 					<div class="flex-1 mr-2">
 						<select
-							class="w-full rounded py-2 px-4 text-sm dark:text-gray-300 dark:bg-gray-800 outline-none"
+							class="w-full rounded-lg py-2 px-4 text-sm dark:text-gray-300 dark:bg-gray-850 outline-none"
 							bind:value={selectedModel}
-							placeholder="Select a model"
+							placeholder={$i18n.t('Select a model')}
+							required
 						>
 							{#if !selectedModel}
-								<option value="" disabled selected>Select a model</option>
+								<option value="" disabled selected>{$i18n.t('Select a model')}</option>
 							{/if}
 							{#each models ?? [] as model}
-								<option value={model.title} class="bg-gray-100 dark:bg-gray-700"
-									>{model.model_name}</option
-								>
+								<option value={model.id} class="bg-gray-100 dark:bg-gray-700">{model.name}</option>
 							{/each}
 						</select>
 					</div>
@@ -209,12 +337,12 @@
 			</div>
 
 			<div>
-				<div class=" mb-2.5 text-sm font-medium">Set Image Size</div>
+				<div class=" mb-2.5 text-sm font-medium">{$i18n.t('Set Image Size')}</div>
 				<div class="flex w-full">
 					<div class="flex-1 mr-2">
 						<input
-							class="w-full rounded py-2 px-4 text-sm dark:text-gray-300 dark:bg-gray-800 outline-none"
-							placeholder="Enter Image Size (e.g. 512x512)"
+							class="w-full rounded-lg py-2 px-4 text-sm dark:text-gray-300 dark:bg-gray-850 outline-none"
+							placeholder={$i18n.t('Enter Image Size (e.g. 512x512)')}
 							bind:value={imageSize}
 						/>
 					</div>
@@ -222,12 +350,12 @@
 			</div>
 
 			<div>
-				<div class=" mb-2.5 text-sm font-medium">Set Steps</div>
+				<div class=" mb-2.5 text-sm font-medium">{$i18n.t('Set Steps')}</div>
 				<div class="flex w-full">
 					<div class="flex-1 mr-2">
 						<input
-							class="w-full rounded py-2 px-4 text-sm dark:text-gray-300 dark:bg-gray-800 outline-none"
-							placeholder="Enter Number of Steps (e.g. 50)"
+							class="w-full rounded-lg py-2 px-4 text-sm dark:text-gray-300 dark:bg-gray-850 outline-none"
+							placeholder={$i18n.t('Enter Number of Steps (e.g. 50)')}
 							bind:value={steps}
 						/>
 					</div>
@@ -238,13 +366,13 @@
 
 	<div class="flex justify-end pt-3 text-sm font-medium">
 		<button
-			class=" px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-gray-100 transition rounded flex flex-row space-x-1 items-center {loading
+			class=" px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-gray-100 transition rounded-lg flex flex-row space-x-1 items-center {loading
 				? ' cursor-not-allowed'
 				: ''}"
 			type="submit"
 			disabled={loading}
 		>
-			Save
+			{$i18n.t('Save')}
 
 			{#if loading}
 				<div class="ml-2 self-center">
