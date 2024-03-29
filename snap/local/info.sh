@@ -5,8 +5,8 @@ PORT=$(snapctl get port)
 
 SERVICE_INFO=$(snapctl services $SNAP_INSTANCE_NAME.listener)
 
-echo $SERVICE_INFO
-STATUS=$(echo $SERVICE_INFO | awk '/open-webui.listener/{print $3}')
+echo "$SERVICE_INFO"
+STATUS=$(echo "$SERVICE_INFO" | awk '/open-webui.listener/{print $3}')
 
 if [ "$STATUS" == "active" ]; then
   echo ''
