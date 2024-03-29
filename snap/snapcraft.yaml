@@ -20,17 +20,7 @@ architectures:
 
 apps:
   open-webui:
-    command: bin/run-snap.sh
-    plugs:
-      - home
-      - removable-media
-      - network
-      - network-bind
-      - opengl
-    environment:
-      ENV: prod
-      SCARF_NO_ANALYTICS: 'true'
-      DO_NOT_TRACK: 'true'
+    command: bin/info.sh
   listener:
     command: bin/run-snap.sh
     daemon: simple
@@ -51,6 +41,7 @@ parts:
     plugin: dump
     source: ./snap/local
     organize:
+      info.sh: bin/info.sh
       run-snap.sh: bin/run-snap.sh
   minilm:
     plugin: dump
