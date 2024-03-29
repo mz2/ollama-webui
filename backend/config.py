@@ -26,7 +26,9 @@ except ImportError:
     log.warning("dotenv not installed, skipping...")
 
 WEBUI_NAME = "Open WebUI"
-shutil.copyfile("../build/favicon.png", "./static/favicon.png")
+
+if not os.path.exists("./static/favicon.png"):
+    shutil.copyfile("../build/favicon.png", "./static/favicon.png")
 
 ####################################
 # ENV (dev,test,prod)
@@ -389,7 +391,7 @@ When answer to user:
 - If you don't know when you are not sure, ask for clarification.
 Avoid mentioning that you obtained the information from the context.
 And answer according to the language of the user's question.
-        
+
 Given the context information, answer the query.
 Query: [query]"""
 
