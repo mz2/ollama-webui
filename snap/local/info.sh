@@ -1,18 +1,17 @@
 #!/bin/bash
 
-SERVICE_NAME="snap.$SNAP_INSTANCE_NAME.listener.service"
-STATUS=$(systemctl is-active $SERVICE_NAME)
 HOST=$(snapctl get host)
 PORT=$(snapctl get port)
 
-$SERVICE_INFO=$(snapctl services $SNAP_INSTANCE_NAME.listener)
+SERVICE_INFO=$(snapctl services $SNAP_INSTANCE_NAME.listener)
 
 echo $SERVICE_INFO
-STATUS=$(echo $SERVICE_INFO | awk /open-webui.listener/{print $3})
+STATUS=$(echo $SERVICE_INFO | awk '/open-webui.listener/{print $3}')
 
-if [[ "$STATUS" == "active" ]]; then
+if [ "$STATUS" == "active" ]; then
+  echo ''
   echo "Open $SNAP_INSTANCE_NAME in your browser at the following URL: http://$HOST:$PORT"
-  echo ""
+  echo ''
 else
   echo ''
   echo "If you expected the service to be up, check that the port $PORT is available, not bound by some other service."
