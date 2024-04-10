@@ -11,5 +11,5 @@ OPENAI_API_BASE_URL=$(snapctl get openai-api-base-url) \
 OPENAI_API_KEY=$(snapctl get openai-api-key) \
 ENABLE_SIGNUP=$(snapctl get enable-signup) \
 GLOBAL_LOG_LEVEL=$(snapctl get global-log-level) \
-FRONTEND_BUILD_DIR=$SNAP/frontend \
+FRONTEND_BUILD_DIR=$SNAP/build \
 $SNAP/backend/start.sh $@

@@ -13,6 +13,5 @@ snapctl set enable-signup="true"
 
 snapctl set global-log-level=""
 
-mkdir -p $SNAP_COMMON/data
 snapctl set data-dir="$SNAP_COMMON/data"
 

@@ -36,6 +36,7 @@ from config import (
     ENV,
     VERSION,
     CHANGELOG,
+    CACHE_DIR,
     FRONTEND_BUILD_DIR,
     MODEL_FILTER_ENABLED,
     MODEL_FILTER_LIST,
@@ -260,7 +261,7 @@ async def get_app_latest_release_version():
 
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
-app.mount("/cache", StaticFiles(directory="data/cache"), name="cache")
+app.mount("/cache", StaticFiles(directory=CACHE_DIR), name="cache")
 
 
 app.mount(

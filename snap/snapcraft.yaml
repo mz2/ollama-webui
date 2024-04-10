@@ -8,7 +8,7 @@ description: |
   the frontend and the backend (which serves as a reverse proxy,
   handling static frontend files, and additional features).
   Both are set up.
-# adopt-info: backend
+adopt-info: backend
 grade: stable
 confinement: strict
 license: MIT
@@ -20,17 +20,7 @@ architectures:
 
 apps:
   open-webui:
-    command: bin/run-snap.sh
-    plugs:
-      - home
-      - removable-media
-      - network
-      - network-bind
-      - opengl
-    environment:
-      ENV: prod
-      SCARF_NO_ANALYTICS: 'true'
-      DO_NOT_TRACK: 'true'
+    command: bin/info.sh
   listener:
     command: bin/run-snap.sh
     daemon: simple
@@ -51,6 +41,7 @@ parts:
     plugin: dump
     source: ./snap/local
     organize:
+      info.sh: bin/info.sh
       run-snap.sh: bin/run-snap.sh
   minilm:
     plugin: dump
@@ -66,7 +57,7 @@ parts:
       craftctl default
       npm ci
       npm run build
-      cp -r build $CRAFT_PART_INSTALL/frontend
+      cp -r build $CRAFT_PART_INSTALL/build
     stage-snaps:
       - node/20/stable
   backend:
@@ -92,6 +83,11 @@ parts:
       - libavfilter7
     python-requirements:
       - backend/requirements.txt
+    override-pull: |
+      craftctl default
+      last_committed_tag="$(git describe --tags --abbrev=0)"
+      last_committed_tag_ver="$(echo ${last_committed_tag} | sed 's/v//')"
+      craftctl set version="$(git describe --tags | sed 's/v//')"
     override-build: |
       craftctl default
       pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu --no-cache-dir
